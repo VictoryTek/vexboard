@@ -1,0 +1,115 @@
+mod api;
+mod config;
+mod db;
+mod discovery;
+mod metrics;
+mod probe;
+
+use std::net::SocketAddr;
+use std::sync::Arc;
+
+use sqlx::SqlitePool;
+use tokio::sync::broadcast;
+use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::ServeDir;
+
+use crate::config::AppConfig;
+use crate::discovery::DiscoveryList;
+use crate::metrics::system::SystemSnapshot;
+
+/// Shared application state available to all handlers.
+#[derive(Clone)]
+pub struct AppState {
+    pub db: SqlitePool,
+    pub config: Arc<AppConfig>,
+    pub discoveries: DiscoveryList,
+    pub metrics_tx: broadcast::Sender<SystemSnapshot>,
+    pub probe_tx: broadcast::Sender<probe::uptime::ProbeEvent>,
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Initialize tracing
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+
+    tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .with_target(true)
+        .init();
+
+    tracing::info!("Starting VexBoard v{}", env!("CARGO_PKG_VERSION"));
+
+    // Load configuration
+    let config = AppConfig::load()?;
+    let config = Arc::new(config);
+    tracing::info!(host = %config.server.host, port = %config.server.port, "Configuration loaded");
+
+    // Initialize database
+    let db = db::init_pool(&config.database.path).await?;
+    tracing::info!(path = %config.database.path.display(), "Database initialized");
+
+    // Create broadcast channels
+    let (metrics_tx, _) = broadcast::channel::<SystemSnapshot>(64);
+    let (probe_tx, _) = broadcast::channel::<probe::uptime::ProbeEvent>(256);
+
+    // Create discovery list
+    let discoveries = discovery::new_discovery_list();
+
+    // Build application state
+    let state = AppState {
+        db: db.clone(),
+        config: config.clone(),
+        discoveries: discoveries.clone(),
+        metrics_tx: metrics_tx.clone(),
+        probe_tx: probe_tx.clone(),
+    };
+
+    // Spawn background tasks
+    let disc_config = config.discovery.clone();
+    let disc_db = db.clone();
+    let disc_list = discoveries.clone();
+    tokio::spawn(async move {
+        discovery::systemd::discovery_loop(disc_list, disc_db, disc_config).await;
+    });
+
+    let probe_config = config.probe.clone();
+    let probe_db = db.clone();
+    let probe_tx_clone = probe_tx.clone();
+    tokio::spawn(async move {
+        probe::start_probe_loop(probe_db, probe_config, probe_tx_clone).await;
+    });
+
+    let metrics_tx_clone = metrics_tx.clone();
+    let metrics_interval = config.metrics.push_interval_ms;
+    tokio::spawn(async move {
+        metrics::system::metrics_loop(metrics_tx_clone, metrics_interval).await;
+    });
+
+    // Build router
+    let app = api::router().with_state(state);
+
+    // Serve static assets if configured
+    let app = if config.server.assets_path != "embedded" {
+        app.fallback_service(ServeDir::new(&config.server.assets_path))
+    } else {
+        app.fallback_service(ServeDir::new("assets"))
+    };
+
+    // Add CORS for development
+    let app = app.layer(
+        CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any),
+    );
+
+    // Start server
+    let addr: SocketAddr = format!("{}:{}", config.server.host, config.server.port).parse()?;
+    tracing::info!(%addr, "Listening");
+
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app.into_make_service()).await?;
+
+    Ok(())
+}

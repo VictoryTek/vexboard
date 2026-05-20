@@ -1,0 +1,33 @@
+# Rust build artifacts
+target/
+Cargo.lock
+
+# SQLite databases (dev)
+*.db
+*.db-shm
+*.db-wal
+
+# Frontend build output
+dist/
+crates/vexboard-frontend/dist/
+
+# Trunk cache
+.trunk/
+
+# Nix build outputs
+result
+result-*
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

@@ -1,0 +1,20 @@
+version: "3.9"
+services:
+  vexboard:
+    image: ghcr.io/your-org/vexboard:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vexboard
+    restart: unless-stopped
+    ports:
+      - "7280:7280"
+    volumes:
+      - vexboard_data:/var/lib/vexboard
+      - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket:ro
+    environment:
+      VEXBOARD_AUTH_SECRET: "change-me"
+      VEXBOARD_SERVER__PORT: "7280"
+
+volumes:
+  vexboard_data:
