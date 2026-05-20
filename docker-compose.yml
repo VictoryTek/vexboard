@@ -1,7 +1,7 @@
 version: "3.9"
 services:
   vexboard:
-    image: ghcr.io/your-org/vexboard:latest
+    image: ghcr.io/victorytek/vexboard:latest
     build:
       context: .
       dockerfile: Dockerfile
