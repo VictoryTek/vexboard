@@ -1,0 +1,10 @@
+[advisories]
+ignore = [
+    # RUSTSEC-2023-0071: rsa Marvin Attack timing sidechannel — present in
+    # Cargo.lock via sqlx-mysql, but this workspace uses sqlite only
+    # (no "mysql" feature). sqlx-mysql is never compiled into any binary.
+    "RUSTSEC-2023-0071",
+    # RUSTSEC-2024-0436: paste crate unmaintained — transitive via leptos.
+    # No actionable fix available; upstream Leptos must update.
+    "RUSTSEC-2024-0436",
+]

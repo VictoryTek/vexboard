@@ -54,5 +54,8 @@ async fn trigger_refresh(State(state): State<AppState>) -> impl IntoResponse {
             tracing::error!("Discovery refresh failed: {e}");
         }
     });
-    (StatusCode::ACCEPTED, Json(json!({"status": "refresh triggered"})))
+    (
+        StatusCode::ACCEPTED,
+        Json(json!({"status": "refresh triggered"})),
+    )
 }

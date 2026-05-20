@@ -36,16 +36,8 @@ pub async fn probe_service(
 
     let start = Instant::now();
 
-    // Try HEAD first, fall back to GET
-    let result = client.head(&url).send().await.or_else(|_| {
-        // This is a sync fallback pattern — we'll just try GET in the same branch
-        Err(reqwest::Error::from(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "HEAD failed",
-        )))
-    });
-
-    let (status, latency_ms) = match result {
+    // Try HEAD first; if it fails for any reason, fall back to GET.
+    let (status, latency_ms) = match client.head(&url).send().await {
         Ok(resp) => {
             let latency = start.elapsed().as_millis() as i64;
             if resp.status().is_success() || resp.status().is_redirection() {
@@ -55,7 +47,7 @@ pub async fn probe_service(
             }
         }
         Err(_) => {
-            // HEAD failed, try GET
+            // HEAD failed — fall back to GET.
             let start2 = Instant::now();
             match client.get(&url).send().await {
                 Ok(resp) => {
@@ -72,14 +64,13 @@ pub async fn probe_service(
     };
 
     // Record result in database
-    let _ = sqlx::query(
-        "INSERT INTO probe_results (service_id, status, latency_ms) VALUES (?, ?, ?)",
-    )
-    .bind(svc.id)
-    .bind(&status)
-    .bind(latency_ms)
-    .execute(db)
-    .await;
+    let _ =
+        sqlx::query("INSERT INTO probe_results (service_id, status, latency_ms) VALUES (?, ?, ?)")
+            .bind(svc.id)
+            .bind(&status)
+            .bind(latency_ms)
+            .execute(db)
+            .await;
 
     // Trim old results to keep max_history entries
     let _ = sqlx::query(

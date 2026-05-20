@@ -1,6 +1,7 @@
-use leptos::*;
+use leptos::prelude::*;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ServiceData {
     pub id: i64,
     pub display_name: String,
@@ -32,7 +33,7 @@ pub fn ServiceCard(service: ServiceData) -> impl IntoView {
                         {service.icon.clone().unwrap_or_else(|| "●".to_string())}
                     </div>
                     <div>
-                        <h3 class="font-medium text-sm">{&service.display_name}</h3>
+                        <h3 class="font-medium text-sm">{service.display_name.clone()}</h3>
                         {service.description.as_ref().map(|d| view! {
                             <p class="text-xs text-[var(--color-text-muted)] mt-0.5">{d.clone()}</p>
                         })}
@@ -41,7 +42,7 @@ pub fn ServiceCard(service: ServiceData) -> impl IntoView {
                 <div class="flex items-center gap-2">
                     <span class={status_class}>
                         <super::status_badge::StatusDot status=service.status.clone() />
-                        {&latency_text}
+                        {latency_text}
                     </span>
                 </div>
             </div>

@@ -4,8 +4,8 @@ pub mod health;
 pub mod metrics;
 pub mod services;
 
-use axum::Router;
 use crate::AppState;
+use axum::Router;
 
 /// Build the complete API router under `/api/v1`.
 pub fn router() -> Router<AppState> {

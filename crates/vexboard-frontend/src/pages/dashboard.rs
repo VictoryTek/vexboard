@@ -1,9 +1,9 @@
-use leptos::*;
-use serde::Deserialize;
+use leptos::either::Either;
+use leptos::prelude::*;
 
 use crate::components::service_card::{ServiceCard, ServiceData};
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 struct ServiceResponse {
     id: i64,
     display_name: String,
@@ -16,10 +16,7 @@ struct ServiceResponse {
 
 #[component]
 pub fn DashboardPage() -> impl IntoView {
-    let services = create_resource(
-        || (),
-        |_| async move { fetch_services().await.unwrap_or_default() },
-    );
+    let services = LocalResource::new(|| async move { fetch_services().await.unwrap_or_default() });
 
     view! {
         <div>
@@ -31,14 +28,14 @@ pub fn DashboardPage() -> impl IntoView {
             <Suspense fallback=move || view! { <p class="text-[var(--color-text-muted)]">"Loading services..."</p> }>
                 {move || services.get().map(|svcs| {
                     if svcs.is_empty() {
-                        view! {
+                        Either::Left(view! {
                             <div class="text-center py-12">
                                 <p class="text-[var(--color-text-muted)]">"No services configured yet."</p>
                                 <p class="text-xs text-[var(--color-text-muted)] mt-1">"Add one manually or discover running systemd services."</p>
                             </div>
-                        }.into_view()
+                        })
                     } else {
-                        view! {
+                        Either::Right(view! {
                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {svcs.into_iter().map(|svc| {
                                     let data = ServiceData {
@@ -53,7 +50,7 @@ pub fn DashboardPage() -> impl IntoView {
                                     view! { <ServiceCard service=data /> }
                                 }).collect_view()}
                             </div>
-                        }.into_view()
+                        })
                     }
                 })}
             </Suspense>

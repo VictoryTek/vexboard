@@ -46,6 +46,7 @@ pub struct User {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct Setting {
     pub key: String,
     pub value: String,

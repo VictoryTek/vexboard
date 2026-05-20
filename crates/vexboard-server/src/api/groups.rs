@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{delete, get, post, put},
+    routing::{get, put},
     Json, Router,
 };
 use serde_json::json;
@@ -13,7 +13,7 @@ use crate::AppState;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(list_groups).post(create_group))
-        .route("/:id", put(update_group).delete(delete_group))
+        .route("/{id}", put(update_group).delete(delete_group))
 }
 
 #[tracing::instrument(skip(state))]
@@ -118,19 +118,14 @@ async fn update_group(
 }
 
 #[tracing::instrument(skip(state))]
-async fn delete_group(
-    State(state): State<AppState>,
-    Path(id): Path<i64>,
-) -> impl IntoResponse {
+async fn delete_group(State(state): State<AppState>, Path(id): Path<i64>) -> impl IntoResponse {
     let result = sqlx::query("DELETE FROM groups WHERE id = ?")
         .bind(id)
         .execute(&state.db)
         .await;
 
     match result {
-        Ok(r) if r.rows_affected() > 0 => {
-            (StatusCode::OK, Json(json!({"status": "deleted"})))
-        }
+        Ok(r) if r.rows_affected() > 0 => (StatusCode::OK, Json(json!({"status": "deleted"}))),
         Ok(_) => (
             StatusCode::NOT_FOUND,
             Json(json!({"error": "Group not found"})),

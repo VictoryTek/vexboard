@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{delete, get, post, put},
+    routing::{get, post, put},
     Json, Router,
 };
 use serde_json::json;
@@ -13,8 +13,8 @@ use crate::AppState;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(list_services).post(create_service))
-        .route("/:id", put(update_service).delete(delete_service))
-        .route("/:id/claim", post(claim_service))
+        .route("/{id}", put(update_service).delete(delete_service))
+        .route("/{id}/claim", post(claim_service))
 }
 
 #[tracing::instrument(skip(state))]
@@ -69,7 +69,9 @@ async fn create_service(
     State(state): State<AppState>,
     Json(payload): Json<CreateService>,
 ) -> impl IntoResponse {
-    let tags_json = payload.tags.map(|t| serde_json::to_string(&t).unwrap_or_default());
+    let tags_json = payload
+        .tags
+        .map(|t| serde_json::to_string(&t).unwrap_or_default());
 
     let result = sqlx::query(
         "INSERT INTO services (systemd_unit, display_name, description, url, icon, group_id, \
@@ -112,26 +114,6 @@ async fn update_service(
     Json(payload): Json<UpdateService>,
 ) -> impl IntoResponse {
     // Build dynamic update query
-    let mut sets = Vec::new();
-    let mut binds: Vec<Box<dyn std::fmt::Display>> = Vec::new();
-
-    if let Some(ref name) = payload.display_name {
-        sets.push("display_name = ?");
-        binds.push(Box::new(name.clone()));
-    }
-    if let Some(ref desc) = payload.description {
-        sets.push("description = ?");
-        binds.push(Box::new(desc.clone()));
-    }
-    if let Some(ref url) = payload.url {
-        sets.push("url = ?");
-        binds.push(Box::new(url.clone()));
-    }
-    if let Some(ref icon) = payload.icon {
-        sets.push("icon = ?");
-        binds.push(Box::new(icon.clone()));
-    }
-
     // For simplicity, do a full update with fetched defaults
     let existing = sqlx::query_as::<_, Service>(
         "SELECT id, systemd_unit, display_name, description, url, icon, group_id, \
@@ -205,19 +187,14 @@ async fn update_service(
 }
 
 #[tracing::instrument(skip(state))]
-async fn delete_service(
-    State(state): State<AppState>,
-    Path(id): Path<i64>,
-) -> impl IntoResponse {
+async fn delete_service(State(state): State<AppState>, Path(id): Path<i64>) -> impl IntoResponse {
     let result = sqlx::query("DELETE FROM services WHERE id = ?")
         .bind(id)
         .execute(&state.db)
         .await;
 
     match result {
-        Ok(r) if r.rows_affected() > 0 => {
-            (StatusCode::OK, Json(json!({"status": "deleted"})))
-        }
+        Ok(r) if r.rows_affected() > 0 => (StatusCode::OK, Json(json!({"status": "deleted"}))),
         Ok(_) => (
             StatusCode::NOT_FOUND,
             Json(json!({"error": "Service not found"})),
@@ -238,25 +215,26 @@ async fn claim_service(
     State(state): State<AppState>,
     Path(id): Path<i64>,
     Json(payload): Json<CreateService>,
-) -> impl IntoResponse {
-    // Check if already claimed
+) -> axum::response::Response {
     if let Some(ref unit) = payload.systemd_unit {
-        let exists = sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM services WHERE systemd_unit = ?",
-        )
-        .bind(unit)
-        .fetch_one(&state.db)
-        .await
-        .unwrap_or(0);
+        let exists =
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM services WHERE systemd_unit = ?")
+                .bind(unit)
+                .fetch_one(&state.db)
+                .await
+                .unwrap_or(0);
 
         if exists > 0 {
             return (
                 StatusCode::CONFLICT,
                 Json(json!({"error": "Unit already claimed"})),
-            );
+            )
+                .into_response();
         }
     }
 
     // Reuse create logic
-    create_service(State(state), Json(payload)).await
+    create_service(State(state), Json(payload))
+        .await
+        .into_response()
 }

@@ -7,10 +7,7 @@ pub async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
     let version = env!("CARGO_PKG_VERSION");
 
     // Quick DB connectivity check
-    let db_ok = sqlx::query("SELECT 1")
-        .fetch_one(&state.db)
-        .await
-        .is_ok();
+    let db_ok = sqlx::query("SELECT 1").fetch_one(&state.db).await.is_ok();
 
     if db_ok {
         (

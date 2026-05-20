@@ -1,7 +1,8 @@
-use leptos::*;
+use leptos::prelude::*;
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize, Default)]
+#[allow(dead_code)]
 pub struct SystemMetrics {
     pub cpu_percent: f64,
     pub memory_percent: f64,
@@ -13,7 +14,7 @@ pub struct SystemMetrics {
 
 #[component]
 pub fn MetricBar() -> impl IntoView {
-    let (metrics, set_metrics) = create_signal(SystemMetrics::default());
+    let (metrics, set_metrics) = signal(SystemMetrics::default());
 
     // Connect to SSE stream for live metrics
     #[cfg(target_arch = "wasm32")]
@@ -22,7 +23,7 @@ pub fn MetricBar() -> impl IntoView {
         use wasm_bindgen::JsCast;
         use web_sys::EventSource;
 
-        create_effect(move |_| {
+        Effect::new(move |_| {
             let es = EventSource::new("/api/v1/metrics/stream").ok();
             if let Some(es) = es {
                 let on_message = Closure::wrap(Box::new(move |event: web_sys::MessageEvent| {
@@ -39,6 +40,8 @@ pub fn MetricBar() -> impl IntoView {
             }
         });
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = set_metrics;
 
     let format_bytes = |bytes: u64| -> String {
         if bytes > 1_073_741_824 {

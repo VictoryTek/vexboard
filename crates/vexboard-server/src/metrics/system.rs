@@ -168,7 +168,7 @@ async fn read_disk() -> anyhow::Result<(u64, u64)> {
         }
         // Only count whole disk devices (e.g., sda, nvme0n1), skip partitions
         let name = parts[2];
-        if name.chars().last().map_or(false, |c| c.is_ascii_digit())
+        if name.chars().last().is_some_and(|c| c.is_ascii_digit())
             && !name.contains("nvme")
             && !name.starts_with("sd")
         {

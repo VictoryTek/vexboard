@@ -24,7 +24,7 @@ Visit `http://localhost:7280`.
 
 ```nix
 {
-  inputs.vexboard.url = "github:your-org/vexboard";
+  inputs.vexboard.url = "github:victorytek/vexboard";
 
   # In your configuration.nix:
   services.vexboard = {

@@ -31,7 +31,7 @@ pub async fn init_pool(db_path: &Path) -> anyhow::Result<SqlitePool> {
 /// Run embedded SQL migrations.
 async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
     // Run the init migration manually since we embed it
-    let init_sql = include_str!("db/migrations/001_init.sql");
+    let init_sql = include_str!("migrations/001_init.sql");
     sqlx::raw_sql(init_sql).execute(pool).await?;
     tracing::info!("Database migrations applied");
     Ok(())

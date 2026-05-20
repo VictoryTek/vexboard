@@ -1,18 +1,39 @@
 use std::time::Duration;
 
 use sqlx::SqlitePool;
+use zbus::zvariant;
 use zbus::Connection;
 
 use crate::config::DiscoveryConfig;
 use crate::discovery::{DiscoveredUnit, DiscoveryList};
 
+#[zbus::proxy(
+    interface = "org.freedesktop.systemd1.Manager",
+    default_service = "org.freedesktop.systemd1",
+    default_path = "/org/freedesktop/systemd1"
+)]
+trait Manager {
+    fn list_units(&self) -> zbus::Result<Vec<UnitInfo>>;
+}
+
+#[derive(Debug, zvariant::Type, serde::Deserialize)]
+#[allow(dead_code)]
+struct UnitInfo {
+    pub name: String,
+    pub description: String,
+    pub load_state: String,
+    pub active_state: String,
+    pub sub_state: String,
+    pub followed: String,
+    pub object_path: zvariant::OwnedObjectPath,
+    pub queued_job_id: u32,
+    pub job_type: String,
+    pub job_object_path: zvariant::OwnedObjectPath,
+}
+
 /// Background loop that periodically discovers systemd services via D-Bus.
 #[tracing::instrument(skip_all)]
-pub async fn discovery_loop(
-    discoveries: DiscoveryList,
-    db: SqlitePool,
-    config: DiscoveryConfig,
-) {
+pub async fn discovery_loop(discoveries: DiscoveryList, db: SqlitePool, config: DiscoveryConfig) {
     if !config.enabled {
         tracing::info!("systemd discovery is disabled");
         return;
@@ -37,11 +58,7 @@ pub async fn discover_units(
     config: &DiscoveryConfig,
 ) -> anyhow::Result<()> {
     let connection = Connection::system().await?;
-    let proxy = zbus::fdo::ManagerProxy::builder(&connection)
-        .destination("org.freedesktop.systemd1")?
-        .path("/org/freedesktop/systemd1")?
-        .build()
-        .await?;
+    let proxy = ManagerProxy::new(&connection).await?;
 
     // ListUnits returns Vec of unit structs
     let units = proxy.list_units().await?;
@@ -49,11 +66,11 @@ pub async fn discover_units(
     let mut unclaimed = Vec::new();
 
     for unit in &units {
-        let name = &unit.0;      // unit name
-        let desc = &unit.1;      // description
-        let load_state = &unit.2; // load state
-        let active_state = &unit.3; // active state
-        let sub_state = &unit.4; // sub state
+        let name = &unit.name;
+        let desc = &unit.description;
+        let load_state = &unit.load_state;
+        let active_state = &unit.active_state;
+        let sub_state = &unit.sub_state;
 
         // Only .service units that are loaded and active
         if !name.ends_with(".service") {
@@ -69,13 +86,12 @@ pub async fn discover_units(
         }
 
         // Check if already claimed in DB
-        let claimed = sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM services WHERE systemd_unit = ?",
-        )
-        .bind(name)
-        .fetch_one(db)
-        .await
-        .unwrap_or(0);
+        let claimed =
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM services WHERE systemd_unit = ?")
+                .bind(name)
+                .fetch_one(db)
+                .await
+                .unwrap_or(0);
 
         if claimed > 0 {
             continue;
@@ -97,12 +113,16 @@ pub async fn discover_units(
     Ok(())
 }
 
-/// Check if a unit name matches any exclusion pattern (supports trailing `*` glob).
+/// Check if a unit name matches any exclusion pattern (supports `*` glob, including mid-pattern).
 fn is_excluded(name: &str, patterns: &[String]) -> bool {
     for pattern in patterns {
-        if pattern.ends_with('*') {
-            let prefix = &pattern[..pattern.len() - 1];
-            if name.starts_with(prefix) {
+        if let Some(star_pos) = pattern.find('*') {
+            let prefix = &pattern[..star_pos];
+            let suffix = &pattern[star_pos + 1..];
+            if name.len() >= prefix.len() + suffix.len()
+                && name.starts_with(prefix)
+                && name.ends_with(suffix)
+            {
                 return true;
             }
         } else if name == pattern {

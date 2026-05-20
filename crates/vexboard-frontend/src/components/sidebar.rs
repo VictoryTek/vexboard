@@ -1,8 +1,8 @@
-use leptos::*;
+use leptos::prelude::*;
 
 #[component]
 pub fn Sidebar() -> impl IntoView {
-    let (collapsed, set_collapsed) = create_signal(false);
+    let (collapsed, set_collapsed) = signal(false);
 
     let width_class = move || {
         if collapsed.get() {

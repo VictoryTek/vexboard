@@ -1,11 +1,12 @@
-use leptos::*;
+use leptos::prelude::*;
+use leptos::task::spawn_local;
 
 #[component]
 pub fn LoginPage() -> impl IntoView {
-    let (username, set_username) = create_signal(String::new());
-    let (password, set_password) = create_signal(String::new());
-    let (error, set_error) = create_signal(Option::<String>::None);
-    let (loading, set_loading) = create_signal(false);
+    let (username, set_username) = signal(String::new());
+    let (password, set_password) = signal(String::new());
+    let (error, set_error) = signal(Option::<String>::None);
+    let (loading, set_loading) = signal(false);
 
     let on_submit = move |ev: web_sys::SubmitEvent| {
         ev.prevent_default();

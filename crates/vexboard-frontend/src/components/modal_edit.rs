@@ -1,6 +1,8 @@
-use leptos::*;
+#![allow(dead_code)]
+use leptos::prelude::*;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct EditFormData {
     pub display_name: String,
     pub description: String,
@@ -11,6 +13,7 @@ pub struct EditFormData {
     pub probe_interval: i64,
 }
 
+#[allow(dead_code)]
 #[component]
 pub fn EditModal(
     #[prop(into)] visible: Signal<bool>,
@@ -27,10 +30,10 @@ pub fn EditModal(
         probe_interval: 30,
     });
 
-    let (name, set_name) = create_signal(initial.display_name);
-    let (desc, set_desc) = create_signal(initial.description);
-    let (url, set_url) = create_signal(initial.url);
-    let (icon, set_icon) = create_signal(initial.icon);
+    let (name, set_name) = signal(initial.display_name);
+    let (desc, set_desc) = signal(initial.description);
+    let (url, set_url) = signal(initial.url);
+    let (icon, set_icon) = signal(initial.icon);
 
     view! {
         <Show when=move || visible.get()>
@@ -38,7 +41,7 @@ pub fn EditModal(
                 // Backdrop
                 <div
                     class="absolute inset-0 bg-black/60 backdrop-blur-sm"
-                    on:click=move |_| on_close.call(())
+                    on:click=move |_| on_close.run(())
                 ></div>
                 // Modal
                 <div class="relative bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-2xl w-full max-w-md p-6">
@@ -85,7 +88,7 @@ pub fn EditModal(
                     <div class="flex justify-end gap-2 mt-6">
                         <button
                             class="px-4 py-2 rounded-lg text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)]"
-                            on:click=move |_| on_close.call(())
+                            on:click=move |_| on_close.run(())
                         >
                             "Cancel"
                         </button>

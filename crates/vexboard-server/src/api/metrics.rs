@@ -14,7 +14,6 @@ use serde_json::json;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 
-use crate::metrics::system::SystemSnapshot;
 use crate::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -41,8 +40,8 @@ async fn metrics_stream(
 }
 
 /// Single JSON snapshot of current system metrics (for initial page load).
-#[tracing::instrument(skip(state))]
-async fn metrics_snapshot(State(state): State<AppState>) -> impl IntoResponse {
+#[tracing::instrument]
+async fn metrics_snapshot() -> impl IntoResponse {
     let snapshot = crate::metrics::system::read_snapshot().await;
     match snapshot {
         Ok(s) => (axum::http::StatusCode::OK, Json(json!(s))),
