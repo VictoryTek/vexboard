@@ -33,9 +33,8 @@ if ($LASTEXITCODE -eq 0) { Pass "cargo build --release" } else { Fail "cargo bui
 Step "Security audit"
 $auditAvailable = (Get-Command cargo-audit -ErrorAction SilentlyContinue) -ne $null
 if ($auditAvailable) {
-    # RUSTSEC-2023-0071: rsa via sqlx-mysql — not compiled into this workspace
-    # (sqlite-only features); rsa only appears via the sqlx-macros proc-macro
-    # build path, never in the runtime binary.
+    # RUSTSEC-2023-0071: rsa via sqlx-mysql — sqlx's optional mysql dep is
+    # always present in Cargo.lock but never compiled (sqlite-only features).
     cargo audit --ignore RUSTSEC-2023-0071
     if ($LASTEXITCODE -eq 0) { Pass "cargo audit" } else { Fail "cargo audit" }
 } else {

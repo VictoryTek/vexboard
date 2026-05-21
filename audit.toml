@@ -1,8 +1,11 @@
 [advisories]
 ignore = [
-    # RUSTSEC-2023-0071: rsa Marvin Attack timing sidechannel — present in
-    # Cargo.lock via sqlx-mysql, but this workspace uses sqlite only
-    # (no "mysql" feature). sqlx-mysql is never compiled into any binary.
+    # RUSTSEC-2023-0071: rsa Marvin Attack — sqlx lists sqlx-mysql as an
+    # optional dependency, so Cargo always includes it (and its rsa dep) in
+    # Cargo.lock even when only the sqlite feature is enabled. The rsa crate
+    # is never compiled into any binary in this workspace; `cargo tree -i rsa
+    # --target all` confirms it is absent from every resolved target. Removal
+    # is not possible without forking sqlx; ignore is the correct response.
     "RUSTSEC-2023-0071",
     # RUSTSEC-2024-0436: paste crate unmaintained — transitive via leptos.
     # No actionable fix available; upstream Leptos must update.
