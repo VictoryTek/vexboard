@@ -23,6 +23,7 @@ RUN apk add --no-cache openssl ca-certificates
 WORKDIR /app
 COPY --from=backend-builder /build/target/release/vexboard-server ./vexboard
 COPY --from=frontend-builder /build/crates/vexboard-frontend/dist ./assets
+COPY config/ ./config/
 RUN mkdir -p /var/lib/vexboard
 EXPOSE 7280
 ENTRYPOINT ["./vexboard"]
