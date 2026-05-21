@@ -67,7 +67,7 @@ jobs:
           restore-keys: ${{ runner.os }}-wasm-
 
       - name: Install Trunk
-        run: cargo install trunk --locked
+        run: which trunk || cargo install trunk --locked
 
       - name: Build frontend (release)
         working-directory: crates/vexboard-frontend
