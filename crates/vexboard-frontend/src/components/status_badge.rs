@@ -2,19 +2,11 @@ use leptos::prelude::*;
 
 #[component]
 pub fn StatusDot(status: String) -> impl IntoView {
-    let (color, animate) = match status.as_str() {
-        "up" => ("bg-[var(--color-success)]", true),
-        "down" => ("bg-[var(--color-danger)]", true),
-        _ => ("bg-[var(--color-text-muted)]", false),
+    let cls = match status.as_str() {
+        "up"   => "status-dot status-dot-up",
+        "down" => "status-dot status-dot-down",
+        _      => "status-dot status-dot-unknown",
     };
 
-    let classes = if animate {
-        format!("w-2 h-2 rounded-full {color} animate-pulse")
-    } else {
-        format!("w-2 h-2 rounded-full {color}")
-    };
-
-    view! {
-        <span class={classes}></span>
-    }
+    view! { <span class={cls}></span> }
 }

@@ -29,7 +29,6 @@ pub fn LoginPage() -> impl IntoView {
 
             match result {
                 Ok(resp) if resp.ok() => {
-                    // Redirect to dashboard
                     #[cfg(target_arch = "wasm32")]
                     {
                         let window = web_sys::window().unwrap();
@@ -47,45 +46,71 @@ pub fn LoginPage() -> impl IntoView {
     };
 
     view! {
-        <div class="min-h-[80vh] flex items-center justify-center">
-            <div class="card w-full max-w-sm p-6">
-                <h1 class="text-lg font-semibold text-center mb-6">"Sign in to VexBoard"</h1>
+        <div class="flex flex-col items-center justify-center" style="min-height: 80vh; gap: 1.5rem">
+            // Brand
+            <div class="flex flex-col items-center" style="gap: 0.75rem">
+                <div style="
+                    width: 52px; height: 52px; border-radius: 14px;
+                    background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+                    display: flex; align-items: center; justify-content: center;
+                    box-shadow: 0 0 28px rgba(99,102,241,0.5);
+                ">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white"
+                         stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+                        <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+                        <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+                        <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+                    </svg>
+                </div>
+                <div class="text-center">
+                    <h1 class="text-xl font-semibold tracking-tight"
+                        style="letter-spacing: -0.02em">"VexBoard"</h1>
+                    <p class="text-xs mt-0.5" style="color: var(--color-text-muted)">
+                        "Sign in to your dashboard"
+                    </p>
+                </div>
+            </div>
 
+            // Form card
+            <div class="card" style="width: 100%; max-width: 360px;">
                 {move || error.get().map(|e| view! {
-                    <div class="mb-4 p-3 rounded-lg bg-[rgba(239,68,68,0.1)] text-[var(--color-danger)] text-xs">
+                    <div class="mb-4 px-3 py-2.5 rounded-lg text-xs"
+                         style="background: var(--color-danger-dim); color: var(--color-danger); border: 1px solid rgba(239,68,68,0.2)">
                         {e}
                     </div>
                 })}
 
                 <form on:submit=on_submit class="space-y-4">
                     <div>
-                        <label class="block text-xs text-[var(--color-text-muted)] mb-1">"Username"</label>
+                        <label class="form-label">"Username"</label>
                         <input
                             type="text"
                             autocomplete="username"
                             required=true
-                            class="w-full px-3 py-2 rounded-lg bg-[var(--color-bg-primary)] border border-[var(--color-border)] text-sm"
+                            class="form-input"
                             prop:value=move || username.get()
                             on:input=move |ev| set_username.set(event_target_value(&ev))
                         />
                     </div>
                     <div>
-                        <label class="block text-xs text-[var(--color-text-muted)] mb-1">"Password"</label>
+                        <label class="form-label">"Password"</label>
                         <input
                             type="password"
                             autocomplete="current-password"
                             required=true
-                            class="w-full px-3 py-2 rounded-lg bg-[var(--color-bg-primary)] border border-[var(--color-border)] text-sm"
+                            class="form-input"
                             prop:value=move || password.get()
                             on:input=move |ev| set_password.set(event_target_value(&ev))
                         />
                     </div>
                     <button
                         type="submit"
-                        class="btn-primary w-full"
+                        class="btn-primary"
+                        style="width: 100%; justify-content: center;"
                         disabled=move || loading.get()
                     >
-                        {move || if loading.get() { "Signing in..." } else { "Sign In" }}
+                        {move || if loading.get() { "Signing in…" } else { "Sign In" }}
                     </button>
                 </form>
             </div>

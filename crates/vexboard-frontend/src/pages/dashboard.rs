@@ -20,18 +20,65 @@ pub fn DashboardPage() -> impl IntoView {
 
     view! {
         <div>
-            <div class="flex items-center justify-between mb-6">
-                <h1 class="text-xl font-semibold">"Services"</h1>
-                <button class="btn-primary">"+ Add Service"</button>
+            <div class="page-header">
+                <h1 class="page-title">"Services"</h1>
+                <button class="btn-primary">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2.5"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    "Add Service"
+                </button>
             </div>
 
-            <Suspense fallback=move || view! { <p class="text-[var(--color-text-muted)]">"Loading services..."</p> }>
+            <Suspense fallback=move || view! {
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {(0..3_u8).map(|_| view! {
+                        <div class="service-card" style="opacity:0.35;pointer-events:none">
+                            <div class="flex items-start gap-3">
+                                <div class="service-icon" style="background:var(--color-bg-hover);border-color:transparent"></div>
+                                <div class="space-y-2 flex-1">
+                                    <div style="width:120px;height:12px;border-radius:6px;background:var(--color-bg-hover)"></div>
+                                    <div style="width:80px;height:10px;border-radius:6px;background:var(--color-bg-hover)"></div>
+                                </div>
+                            </div>
+                        </div>
+                    }).collect_view()}
+                </div>
+            }>
                 {move || services.get().map(|svcs| {
                     if svcs.is_empty() {
                         Either::Left(view! {
-                            <div class="text-center py-12">
-                                <p class="text-[var(--color-text-muted)]">"No services configured yet."</p>
-                                <p class="text-xs text-[var(--color-text-muted)] mt-1">"Add one manually or discover running systemd services."</p>
+                            <div class="empty-state">
+                                <div class="empty-icon">
+                                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+                                         stroke="currentColor" stroke-width="1.5"
+                                         stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                        <line x1="8" y1="21" x2="16" y2="21"/>
+                                        <line x1="12" y1="17" x2="12" y2="21"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-semibold"
+                                       style="color: var(--color-text-secondary)">
+                                        "No services configured"
+                                    </p>
+                                    <p class="text-xs mt-1" style="color: var(--color-text-muted)">
+                                        "Add a service or discover running systemd units."
+                                    </p>
+                                </div>
+                                <button class="btn-primary">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                         stroke="currentColor" stroke-width="2.5"
+                                         stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="12" y1="5" x2="12" y2="19"/>
+                                        <line x1="5" y1="12" x2="19" y2="12"/>
+                                    </svg>
+                                    "Add your first service"
+                                </button>
                             </div>
                         })
                     } else {

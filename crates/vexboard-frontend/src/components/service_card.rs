@@ -14,47 +14,76 @@ pub struct ServiceData {
 
 #[component]
 pub fn ServiceCard(service: ServiceData) -> impl IntoView {
-    let status_class = match service.status.as_str() {
-        "up" => "badge-up",
-        "down" => "badge-down",
-        _ => "badge-unknown",
+    let (badge_cls, dot_cls, status_label) = match service.status.as_str() {
+        "up"   => ("status-badge status-badge-up",      "status-dot status-dot-up",      "Up"),
+        "down" => ("status-badge status-badge-down",    "status-dot status-dot-down",    "Down"),
+        _      => ("status-badge status-badge-unknown", "status-dot status-dot-unknown", "—"),
     };
 
-    let latency_text = service
-        .latency_ms
-        .map(|ms| format!("{ms}ms"))
-        .unwrap_or_else(|| "—".to_string());
+    let latency = service.latency_ms.map(|ms| format!("{ms}ms"));
+
+    let first = service.display_name.chars().next().unwrap_or('?');
+    let icon_display = service
+        .icon
+        .clone()
+        .filter(|i| !i.is_empty())
+        .unwrap_or_else(|| first.to_ascii_uppercase().to_string());
 
     view! {
-        <div class="card hover:bg-[var(--color-bg-hover)] transition-colors cursor-pointer group">
-            <div class="flex items-start justify-between">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-lg bg-[var(--color-bg-hover)] flex items-center justify-center text-[var(--color-text-secondary)]">
-                        {service.icon.clone().unwrap_or_else(|| "●".to_string())}
+        <div class="service-card">
+            // Header: icon + name/description + status badge
+            <div class="flex items-start justify-between gap-3">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="service-icon">
+                        <span>{icon_display}</span>
                     </div>
-                    <div>
-                        <h3 class="font-medium text-sm">{service.display_name.clone()}</h3>
+                    <div class="min-w-0 flex-1">
+                        <h3 class="text-sm font-semibold truncate leading-tight"
+                            style="color: var(--color-text-primary)">
+                            {service.display_name}
+                        </h3>
                         {service.description.as_ref().map(|d| view! {
-                            <p class="text-xs text-[var(--color-text-muted)] mt-0.5">{d.clone()}</p>
+                            <p class="text-xs truncate mt-0.5 leading-snug"
+                               style="color: var(--color-text-muted)">
+                                {d.clone()}
+                            </p>
                         })}
                     </div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <span class={status_class}>
-                        <super::status_badge::StatusDot status=service.status.clone() />
-                        {latency_text}
-                    </span>
+
+                // Status badge
+                <div class={badge_cls}>
+                    <span class={dot_cls}></span>
+                    <span>{status_label}</span>
+                    {latency.map(|lat| view! {
+                        <span style="font-size:0.65rem;font-weight:400;opacity:0.65;text-transform:none;letter-spacing:0">
+                            {lat}
+                        </span>
+                    })}
                 </div>
             </div>
+
+            // URL footer
             {service.url.as_ref().map(|url| view! {
-                <div class="mt-3 pt-3 border-t border-[var(--color-border)]">
+                <div class="mt-3 pt-3" style="border-top: 1px solid var(--color-border)">
                     <a
                         href={url.clone()}
                         target="_blank"
                         rel="noopener noreferrer"
-                        class="text-xs text-[var(--color-accent)] hover:underline"
+                        class="flex items-center gap-1.5 text-xs transition-colors"
+                        style="color: var(--color-text-muted)"
+                        onmouseover="this.style.color='var(--color-accent)'"
+                        onmouseout="this.style.color='var(--color-text-muted)'"
                     >
-                        {url.clone()}
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2"
+                             stroke-linecap="round" stroke-linejoin="round"
+                             style="flex-shrink:0">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="2" y1="12" x2="22" y2="12"/>
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                        </svg>
+                        <span class="truncate">{url.clone()}</span>
                     </a>
                 </div>
             })}
