@@ -1,14 +1,15 @@
 # Stage 1: Build Rust backend
-FROM rust:1.85-slim AS backend-builder
-RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+FROM rust:1.85-alpine AS backend-builder
+RUN apk add --no-cache build-base cmake perl bash pkgconf openssl-dev
 WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
 RUN cargo build --release --bin vexboard-server
 
 # Stage 2: Build frontend (Trunk + WASM)
-FROM rust:1.85-slim AS frontend-builder
-RUN rustup target add wasm32-unknown-unknown && \
+FROM rust:1.85-alpine AS frontend-builder
+RUN apk add --no-cache build-base cmake perl bash pkgconf openssl-dev && \
+    rustup target add wasm32-unknown-unknown && \
     cargo install trunk
 WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
@@ -17,8 +18,8 @@ WORKDIR /build/crates/vexboard-frontend
 RUN trunk build --release
 
 # Stage 3: Runtime
-FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y libssl3 ca-certificates && rm -rf /var/lib/apt/lists/*
+FROM alpine:3.21
+RUN apk add --no-cache openssl ca-certificates
 WORKDIR /app
 COPY --from=backend-builder /build/target/release/vexboard-server ./vexboard
 COPY --from=frontend-builder /build/crates/vexboard-frontend/dist ./assets
