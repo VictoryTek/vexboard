@@ -25,9 +25,13 @@ fn format_bytes(bytes: u64) -> String {
 }
 
 fn usage_color(pct: f64) -> &'static str {
-    if pct > 85.0 { "var(--color-danger)" }
-    else if pct > 60.0 { "var(--color-warning)" }
-    else { "var(--color-text-primary)" }
+    if pct > 85.0 {
+        "var(--color-danger)"
+    } else if pct > 60.0 {
+        "var(--color-warning)"
+    } else {
+        "var(--color-text-primary)"
+    }
 }
 
 #[component]

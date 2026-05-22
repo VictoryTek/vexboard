@@ -38,6 +38,17 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    users.users.vexboard = {
+      isSystemUser = true;
+      group = "vexboard";
+      home = cfg.dataDir;
+      createHome = false;
+      description = "VexBoard service user";
+    };
+    users.groups.vexboard = {};
+
+    security.pam.services.vexboard = {};
+
     systemd.services.vexboard = {
       description = "VexBoard Dashboard";
       wantedBy = [ "multi-user.target" ];
@@ -45,8 +56,10 @@ in
       serviceConfig = {
         ExecStart = "${pkgs.vexboard}/bin/vexboard-server";
         StateDirectory = "vexboard";
-        DynamicUser = true;
-        SupplementaryGroups = [ "systemd-journal" ];
+        DynamicUser = false;
+        User = "vexboard";
+        Group = "vexboard";
+        SupplementaryGroups = [ "shadow" "systemd-journal" ];
         PrivateTmp = true;
         ProtectSystem = "strict";
         ReadWritePaths = [ cfg.dataDir ];

@@ -1,4 +1,4 @@
-{ lib, stdenv, rustPlatform, rustToolchain, pkg-config, openssl, dbus, trunk, wasm-bindgen-cli }:
+{ lib, stdenv, rustPlatform, rustToolchain, pkg-config, openssl, dbus, linux-pam, trunk, wasm-bindgen-cli }:
 
 let
   src = lib.cleanSource ./..;
@@ -21,6 +21,7 @@ rustPlatform.buildRustPackage {
   buildInputs = [
     openssl
     dbus
+    linux-pam
   ];
 
   # Build frontend first, then backend
@@ -31,7 +32,7 @@ rustPlatform.buildRustPackage {
     cd ../..
 
     # Build backend
-    cargo build --release --bin vexboard-server
+    cargo build --release --bin vexboard-server --features pam-auth
   '';
 
   installPhase = ''

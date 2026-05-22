@@ -8,6 +8,10 @@ description = "VexBoard — self-hosted server dashboard backend"
 name = "vexboard-server"
 path = "src/main.rs"
 
+[features]
+default = []
+pam-auth = ["dep:pam-sys", "dep:libc"]
+
 [dependencies]
 tokio = { workspace = true }
 axum = { workspace = true }
@@ -27,3 +31,7 @@ thiserror = { workspace = true }
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["fs", "cors"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
+
+[target.'cfg(unix)'.dependencies]
+pam-sys = { version = "0.5", optional = true }
+libc = { version = "0.2", optional = true }

@@ -5,6 +5,9 @@ mod discovery;
 mod metrics;
 mod probe;
 
+#[cfg(all(unix, feature = "pam-auth"))]
+mod pam_auth;
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -12,6 +15,7 @@ use sqlx::SqlitePool;
 use tokio::sync::broadcast;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
+use tower_sessions::{MemoryStore, SessionManagerLayer};
 
 use crate::config::AppConfig;
 use crate::discovery::DiscoveryList;
@@ -87,7 +91,11 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // Build router
-    let app = api::router().with_state(state);
+    let session_store = MemoryStore::default();
+    // TODO: use a persistent SQLite-backed store for production deployments
+    let session_layer = SessionManagerLayer::new(session_store).with_secure(false);
+
+    let app = api::router().with_state(state).layer(session_layer);
 
     // Serve static assets if configured
     let app = if config.server.assets_path != "embedded" {

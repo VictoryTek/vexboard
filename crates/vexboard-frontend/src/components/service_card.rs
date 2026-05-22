@@ -1,5 +1,7 @@
 use leptos::prelude::*;
 
+use crate::components::status_badge::StatusDot;
+
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct ServiceData {
@@ -14,10 +16,10 @@ pub struct ServiceData {
 
 #[component]
 pub fn ServiceCard(service: ServiceData) -> impl IntoView {
-    let (badge_cls, dot_cls, status_label) = match service.status.as_str() {
-        "up"   => ("status-badge status-badge-up",      "status-dot status-dot-up",      "Up"),
-        "down" => ("status-badge status-badge-down",    "status-dot status-dot-down",    "Down"),
-        _      => ("status-badge status-badge-unknown", "status-dot status-dot-unknown", "—"),
+    let (badge_cls, status_label) = match service.status.as_str() {
+        "up" => ("status-badge status-badge-up", "Up"),
+        "down" => ("status-badge status-badge-down", "Down"),
+        _ => ("status-badge status-badge-unknown", "—"),
     };
 
     let latency = service.latency_ms.map(|ms| format!("{ms}ms"));
@@ -53,7 +55,7 @@ pub fn ServiceCard(service: ServiceData) -> impl IntoView {
 
                 // Status badge
                 <div class={badge_cls}>
-                    <span class={dot_cls}></span>
+                    <StatusDot status=service.status.clone()/>
                     <span>{status_label}</span>
                     {latency.map(|lat| view! {
                         <span style="font-size:0.65rem;font-weight:400;opacity:0.65;text-transform:none;letter-spacing:0">

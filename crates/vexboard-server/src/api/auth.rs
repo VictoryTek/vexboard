@@ -6,8 +6,9 @@ use axum::{
     Json, Router,
 };
 use serde_json::json;
+use tower_sessions::Session;
 
-use crate::db::models::{LoginRequest, UserInfo};
+use crate::db::models::LoginRequest;
 use crate::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -17,9 +18,36 @@ pub fn router() -> Router<AppState> {
         .route("/me", get(me))
 }
 
+#[cfg(all(unix, feature = "pam-auth"))]
+#[tracing::instrument(skip_all)]
+async fn login(
+    State(_state): State<AppState>,
+    session: Session,
+    Json(payload): Json<LoginRequest>,
+) -> impl IntoResponse {
+    use crate::pam_auth::authenticate_pam;
+    if authenticate_pam(&payload.username, &payload.password) {
+        session
+            .insert("username", payload.username.clone())
+            .await
+            .ok();
+        (
+            StatusCode::OK,
+            Json(json!({ "user": { "username": payload.username } })),
+        )
+    } else {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({"error": "Invalid credentials"})),
+        )
+    }
+}
+
+#[cfg(not(all(unix, feature = "pam-auth")))]
 #[tracing::instrument(skip_all)]
 async fn login(
     State(state): State<AppState>,
+    session: Session,
     Json(payload): Json<LoginRequest>,
 ) -> impl IntoResponse {
     let user = sqlx::query_as::<_, crate::db::models::User>(
@@ -53,27 +81,32 @@ async fn login(
         );
     }
 
-    // In a full implementation, create a session via tower-sessions here.
-    // For now, return success with user info.
+    session.insert("username", user.username.clone()).await.ok();
+
     (
         StatusCode::OK,
         Json(json!({
-            "user": UserInfo { id: user.id, username: user.username }
+            "user": crate::db::models::UserInfo { id: user.id, username: user.username }
         })),
     )
 }
 
 #[tracing::instrument(skip_all)]
-async fn logout() -> impl IntoResponse {
-    // Invalidate session (tower-sessions integration)
+async fn logout(session: Session) -> impl IntoResponse {
+    session.flush().await.ok();
     (StatusCode::OK, Json(json!({"status": "logged out"})))
 }
 
 #[tracing::instrument(skip_all)]
-async fn me() -> impl IntoResponse {
-    // Return current session user (placeholder until session middleware is wired)
-    (
-        StatusCode::UNAUTHORIZED,
-        Json(json!({"error": "Not authenticated"})),
-    )
+async fn me(session: Session) -> impl IntoResponse {
+    match session.get::<String>("username").await {
+        Ok(Some(username)) => (
+            StatusCode::OK,
+            Json(json!({ "user": { "username": username } })),
+        ),
+        _ => (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({"error": "Not authenticated"})),
+        ),
+    }
 }

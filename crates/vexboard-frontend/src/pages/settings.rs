@@ -1,7 +1,14 @@
 use leptos::prelude::*;
 
+use crate::components::sidebar::{save_sidebar_mode_to_storage, SidebarMode};
+
 #[component]
 pub fn SettingsPage() -> impl IntoView {
+    let sidebar_mode =
+        use_context::<ReadSignal<SidebarMode>>().expect("SidebarMode context must be provided");
+    let set_sidebar_mode = use_context::<WriteSignal<SidebarMode>>()
+        .expect("set_sidebar_mode context must be provided");
+
     view! {
         <div>
             <div class="page-header">
@@ -26,7 +33,6 @@ pub fn SettingsPage() -> impl IntoView {
                             on:click=move |_| {
                                 #[cfg(target_arch = "wasm32")]
                                 {
-                                    use wasm_bindgen::JsCast;
                                     let doc = web_sys::window().unwrap().document().unwrap();
                                     let html = doc.document_element().unwrap();
                                     let is_dark = html.class_list().contains("dark")
@@ -43,6 +49,38 @@ pub fn SettingsPage() -> impl IntoView {
                         >
                             "Toggle Theme"
                         </button>
+                    </div>
+                </div>
+
+                // Navigation Sidebar
+                <div class="card">
+                    <h2 class="text-sm font-semibold mb-3"
+                        style="color: var(--color-text-primary)">"Navigation Sidebar"</h2>
+                    <div class="space-y-2">
+                        {[
+                            (SidebarMode::HoverExpand,     "Hover Expand",     "Collapsed by default, expands on hover."),
+                            (SidebarMode::AlwaysExpanded,  "Always Expanded",  "Sidebar always shows labels."),
+                            (SidebarMode::AlwaysCollapsed, "Always Collapsed", "Sidebar shows icons only."),
+                        ].into_iter().map(|(mode, label, desc)| {
+                            let mode_for_class = mode.clone();
+                            let mode_for_click = mode.clone();
+                            view! {
+                                <button
+                                    class=move || if sidebar_mode.get() == mode_for_class { "nav-item-active" } else { "nav-item" }
+                                    style="width: 100%; text-align: left; padding: 0.625rem 0.75rem;"
+                                    on:click=move |_| {
+                                        let m = mode_for_click.clone();
+                                        save_sidebar_mode_to_storage(&m);
+                                        set_sidebar_mode.set(m);
+                                    }
+                                >
+                                    <div>
+                                        <p class="text-sm font-medium">{label}</p>
+                                        <p class="text-xs mt-0.5" style="color: var(--color-text-muted)">{desc}</p>
+                                    </div>
+                                </button>
+                            }
+                        }).collect_view()}
                     </div>
                 </div>
 
