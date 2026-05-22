@@ -1,4 +1,3 @@
-version: "3.9"
 services:
   vexboard:
     image: ghcr.io/victorytek/vexboard:latest
