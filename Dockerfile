@@ -1,23 +1,40 @@
-# Stage 1: Build Rust backend
-FROM docker.io/library/rust:1.88-alpine AS backend-builder
-RUN apk add --no-cache build-base cmake perl bash pkgconf openssl-dev
+# ── Stage 0: Base with cargo-chef (cached until Rust version changes) ──────────
+FROM docker.io/library/rust:1.88-alpine AS chef
+RUN apk add --no-cache build-base cmake perl bash pkgconf openssl-dev curl
+RUN cargo install cargo-chef --locked
 WORKDIR /build
+
+# ── Stage 1: Generate dependency recipe from Cargo manifests ──────────────────
+FROM chef AS planner
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ ./crates/
+RUN cargo chef prepare --recipe-path recipe.json
+
+# ── Stage 2: Build Rust backend ───────────────────────────────────────────────
+FROM chef AS backend-builder
+COPY --from=planner /build/recipe.json recipe.json
+# Pre-build all dependencies — this layer is cached until Cargo.lock changes
+RUN cargo chef cook --release --recipe-path recipe.json
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
 RUN cargo build --release --bin vexboard-server
 
-# Stage 2: Build frontend (Trunk + WASM)
-FROM docker.io/library/rust:1.88-alpine AS frontend-builder
-RUN apk add --no-cache build-base cmake perl bash pkgconf openssl-dev && \
-    rustup target add wasm32-unknown-unknown && \
-    cargo install trunk
-WORKDIR /build
+# ── Stage 3: Build frontend (Trunk + WASM) ────────────────────────────────────
+FROM chef AS frontend-builder
+RUN rustup target add wasm32-unknown-unknown
+# Use pre-built Trunk binary — avoids compiling ~400 crates from source
+RUN curl -sSfL \
+    https://github.com/trunk-rs/trunk/releases/latest/download/trunk-x86_64-unknown-linux-musl.tar.gz \
+    | tar -xz -C /usr/local/bin trunk
+COPY --from=planner /build/recipe.json recipe.json
+# Pre-build WASM dependencies — cached until Cargo.lock changes
+RUN cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
 WORKDIR /build/crates/vexboard-frontend
 RUN trunk build --release
 
-# Stage 3: Runtime
+# ── Stage 4: Runtime ──────────────────────────────────────────────────────────
 FROM docker.io/library/alpine:3.21
 RUN apk add --no-cache openssl ca-certificates
 WORKDIR /app
