@@ -54,10 +54,16 @@ async fn fetch_discovered_units() -> Vec<DiscoveredUnitFe> {
 pub fn DiscoveryPanel(#[prop(into)] on_added: Callback<()>) -> impl IntoView {
     let units = LocalResource::new(fetch_discovered_units);
     let (editing, set_editing) = signal::<Option<DiscoveredUnitFe>>(None);
+    let (selected_source, set_selected_source) = signal::<Option<String>>(None);
+    let (selected_unit_name, set_selected_unit_name) = signal::<Option<String>>(None);
 
     let on_save = Callback::new(move |data: EditFormData| {
+        let source = selected_source.get_untracked();
+        let unit_name = selected_unit_name.get_untracked();
         spawn_local(async move {
             let body = serde_json::json!({
+                "systemd_unit": unit_name,
+                "discovery_source": source,
                 "display_name": data.display_name,
                 "description": if data.description.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(data.description) },
                 "url": if data.url.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(data.url) },
@@ -68,7 +74,12 @@ pub fn DiscoveryPanel(#[prop(into)] on_added: Callback<()>) -> impl IntoView {
             if let Ok(req) = gloo_net::http::Request::post("/api/v1/services").json(&body) {
                 let _ = req.send().await;
             }
+            let _ = gloo_net::http::Request::post("/api/v1/discovery/refresh")
+                .send()
+                .await;
             set_editing.set(None);
+            set_selected_source.set(None);
+            set_selected_unit_name.set(None);
             units.refetch();
             on_added.run(());
         });
@@ -89,7 +100,11 @@ pub fn DiscoveryPanel(#[prop(into)] on_added: Callback<()>) -> impl IntoView {
             view! {
                 <EditModal
                     visible=Signal::derive(|| true)
-                    on_close=Callback::new(move |_| set_editing.set(None))
+                    on_close=Callback::new(move |_| {
+                        set_editing.set(None);
+                        set_selected_source.set(None);
+                        set_selected_unit_name.set(None);
+                    })
                     on_save=on_save
                     title="Add Discovered Service"
                     initial=init
@@ -156,7 +171,11 @@ pub fn DiscoveryPanel(#[prop(into)] on_added: Callback<()>) -> impl IntoView {
                                         <button
                                             class="btn-primary"
                                             style="flex-shrink:0; padding:0.3rem 0.75rem; font-size:0.75rem;"
-                                            on:click=move |_| set_editing.set(Some(unit_c.clone()))
+                                            on:click=move |_| {
+                                                set_selected_source.set(Some(unit_c.source.clone()));
+                                                set_selected_unit_name.set(Some(unit_c.unit_name.clone()));
+                                                set_editing.set(Some(unit_c.clone()));
+                                            }
                                         >
                                             "Add"
                                         </button>

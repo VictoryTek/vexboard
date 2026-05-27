@@ -62,7 +62,7 @@ async fn discover_from_socket(
     db: &SqlitePool,
     exclude_images: &[String],
 ) -> anyhow::Result<Vec<DiscoveredUnit>> {
-    let docker = Docker::connect_with_unix(socket, 10, &bollard::API_DEFAULT_VERSION)?;
+    let docker = Docker::connect_with_socket(socket, 10, &bollard::API_DEFAULT_VERSION)?;
 
     // Quick connectivity check
     docker.ping().await?;
@@ -104,10 +104,11 @@ async fn discover_from_socket(
             continue;
         }
 
-        // Skip if already claimed by display_name
+        // Skip if already claimed by either display_name or systemd_unit.
         let claimed = sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM services WHERE display_name = ?",
+            "SELECT COUNT(*) FROM services WHERE display_name = ? OR systemd_unit = ?",
         )
+        .bind(&name)
         .bind(&name)
         .fetch_one(db)
         .await

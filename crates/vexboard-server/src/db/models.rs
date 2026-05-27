@@ -14,6 +14,7 @@ pub struct Group {
 pub struct Service {
     pub id: i64,
     pub systemd_unit: Option<String>,
+    pub discovery_source: Option<String>,
     pub display_name: String,
     pub description: Option<String>,
     pub url: Option<String>,
@@ -57,6 +58,7 @@ pub struct Setting {
 #[derive(Debug, Deserialize)]
 pub struct CreateService {
     pub systemd_unit: Option<String>,
+    pub discovery_source: Option<String>,
     pub display_name: String,
     pub description: Option<String>,
     pub url: Option<String>,
@@ -71,6 +73,7 @@ pub struct CreateService {
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateService {
+    pub discovery_source: Option<String>,
     pub display_name: Option<String>,
     pub description: Option<String>,
     pub url: Option<String>,

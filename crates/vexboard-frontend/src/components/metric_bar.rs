@@ -10,6 +10,8 @@ pub struct SystemMetrics {
     pub memory_total_kb: u64,
     pub net_rx_bytes: u64,
     pub net_tx_bytes: u64,
+    pub disk_free_kb: u64,
+    pub disk_total_kb: u64,
 }
 
 fn format_bytes(bytes: u64) -> String {
@@ -31,6 +33,26 @@ fn usage_color(pct: f64) -> &'static str {
         "var(--color-warning)"
     } else {
         "var(--color-text-primary)"
+    }
+}
+
+fn disk_free_color(free_kb: u64) -> &'static str {
+    let free_gb = free_kb as f64 / 1_048_576.0;
+    if free_gb < 5.0 {
+        "var(--color-danger)"
+    } else if free_gb < 15.0 {
+        "var(--color-warning)"
+    } else {
+        "var(--color-text-primary)"
+    }
+}
+
+fn format_disk_free(free_kb: u64) -> String {
+    let free_gb = free_kb as f64 / 1_048_576.0;
+    if free_gb >= 1.0 {
+        format!("{:.1} GB", free_gb)
+    } else {
+        format!("{:.0} MB", free_kb as f64 / 1024.0)
     }
 }
 
@@ -112,6 +134,31 @@ pub fn MetricBar() -> impl IntoView {
                 </svg>
                 <span class="metric-label">"OUT"</span>
                 <span class="metric-val">{move || format_bytes(metrics.get().net_tx_bytes)}</span>
+            </div>
+
+            <div class="metric-sep"></div>
+
+            // Disk free
+            <div class="metric-item">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                     stroke="var(--color-text-muted)" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                    <path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/>
+                    <path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/>
+                </svg>
+                <span class="metric-label">"DISK"</span>
+                <span class="metric-val"
+                    style=move || format!("color: {}", disk_free_color(metrics.get().disk_free_kb))>
+                    {move || {
+                        let m = metrics.get();
+                        if m.disk_total_kb == 0 {
+                            "—".to_string()
+                        } else {
+                            format!("{} free", format_disk_free(m.disk_free_kb))
+                        }
+                    }}
+                </span>
             </div>
         </div>
     }

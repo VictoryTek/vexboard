@@ -14,6 +14,8 @@ pub struct SystemSnapshot {
     pub net_tx_bytes: u64,
     pub disk_read_bytes: u64,
     pub disk_write_bytes: u64,
+    pub disk_free_kb: u64,
+    pub disk_total_kb: u64,
 }
 
 /// Read a single snapshot of current system metrics from /proc.
@@ -22,6 +24,7 @@ pub async fn read_snapshot() -> anyhow::Result<SystemSnapshot> {
     let (mem_total, mem_used) = read_memory().await?;
     let (net_rx, net_tx) = read_network().await?;
     let (disk_r, disk_w) = read_disk().await?;
+    let (disk_free, disk_total) = read_disk_space();
 
     let mem_percent = if mem_total > 0 {
         (mem_used as f64 / mem_total as f64) * 100.0
@@ -38,7 +41,37 @@ pub async fn read_snapshot() -> anyhow::Result<SystemSnapshot> {
         net_tx_bytes: net_tx,
         disk_read_bytes: disk_r,
         disk_write_bytes: disk_w,
+        disk_free_kb: disk_free,
+        disk_total_kb: disk_total,
     })
+}
+
+/// Read available and total disk space for the root filesystem via statvfs.
+#[cfg(unix)]
+fn read_disk_space() -> (u64, u64) {
+    use std::ffi::CString;
+    let Ok(path) = CString::new("/") else {
+        return (0, 0);
+    };
+    // SAFETY: path is a valid C string, stat is fully initialised via zeroed().
+    let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
+    let ret = unsafe { libc::statvfs(path.as_ptr(), &mut stat) };
+    if ret != 0 {
+        return (0, 0);
+    }
+    let block_size = if stat.f_frsize > 0 {
+        stat.f_frsize as u64
+    } else {
+        stat.f_bsize as u64
+    };
+    let free_kb = (stat.f_bavail as u64).saturating_mul(block_size) / 1024;
+    let total_kb = (stat.f_blocks as u64).saturating_mul(block_size) / 1024;
+    (free_kb, total_kb)
+}
+
+#[cfg(not(unix))]
+fn read_disk_space() -> (u64, u64) {
+    (0, 0)
 }
 
 /// Background loop that reads system metrics and broadcasts them at the configured interval.

@@ -2,13 +2,14 @@ use leptos::either::Either;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
-use crate::components::discovery_panel::DiscoveryPanel;
 use crate::components::modal_edit::{EditFormData, EditModal};
 use crate::components::service_card::{ServiceCard, ServiceData};
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 struct ServiceResponse {
     id: i64,
+    systemd_unit: Option<String>,
+    discovery_source: Option<String>,
     display_name: String,
     description: Option<String>,
     url: Option<String>,
@@ -61,7 +62,7 @@ pub fn DashboardPage() -> impl IntoView {
             </div>
 
             <Suspense fallback=move || view! {
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,360px)); gap:1rem; justify-content:start;">
                     {(0..3_u8).map(|_| view! {
                         <div class="service-card" style="opacity:0.35;pointer-events:none">
                             <div class="flex items-start gap-3">
@@ -100,10 +101,13 @@ pub fn DashboardPage() -> impl IntoView {
                         })
                     } else {
                         Either::Right(view! {
-                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,360px)); gap:1rem; justify-content:start;">
                                 {svcs.into_iter().map(|svc| {
+                                    let id = svc.id;
                                     let data = ServiceData {
                                         id: svc.id,
+                                        systemd_unit: svc.systemd_unit,
+                                        discovery_source: svc.discovery_source,
                                         display_name: svc.display_name,
                                         description: svc.description,
                                         url: svc.url,
@@ -111,14 +115,21 @@ pub fn DashboardPage() -> impl IntoView {
                                         status: svc.status,
                                         latency_ms: svc.latency_ms,
                                     };
-                                    view! { <ServiceCard service=data /> }
+                                    let on_delete = Callback::new(move |_: i64| {
+                                        spawn_local(async move {
+                                            let _ = gloo_net::http::Request::delete(
+                                                &format!("/api/v1/services/{id}")
+                                            ).send().await;
+                                            services.refetch();
+                                        });
+                                    });
+                                    view! { <ServiceCard service=data on_delete=on_delete /> }
                                 }).collect_view()}
                             </div>
                         })
                     }
                 })}
             </Suspense>
-            <DiscoveryPanel on_added=Callback::new(move |_| services.refetch()) />
         </div>
     }
 }

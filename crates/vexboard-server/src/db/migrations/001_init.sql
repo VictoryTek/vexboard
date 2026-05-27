@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS groups (
 CREATE TABLE IF NOT EXISTS services (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     systemd_unit    TEXT,
+    discovery_source TEXT,
     display_name    TEXT NOT NULL,
     description     TEXT,
     url             TEXT,

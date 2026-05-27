@@ -20,7 +20,7 @@ pub fn router() -> Router<AppState> {
 #[tracing::instrument(skip(state))]
 async fn list_services(State(state): State<AppState>) -> impl IntoResponse {
     let services = sqlx::query_as::<_, Service>(
-        "SELECT id, systemd_unit, display_name, description, url, icon, group_id, \
+        "SELECT id, systemd_unit, discovery_source, display_name, description, url, icon, group_id, \
          sort_order, probe_enabled, probe_interval, tags, visible, created_at, updated_at \
          FROM services WHERE visible = 1 ORDER BY sort_order ASC",
     )
@@ -74,11 +74,12 @@ async fn create_service(
         .map(|t| serde_json::to_string(&t).unwrap_or_default());
 
     let result = sqlx::query(
-        "INSERT INTO services (systemd_unit, display_name, description, url, icon, group_id, \
-         sort_order, probe_enabled, probe_interval, tags, visible) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+           "INSERT INTO services (systemd_unit, discovery_source, display_name, description, url, icon, group_id, \
+            sort_order, probe_enabled, probe_interval, tags, visible) \
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&payload.systemd_unit)
+        .bind(&payload.discovery_source)
     .bind(&payload.display_name)
     .bind(&payload.description)
     .bind(&payload.url)
@@ -116,7 +117,7 @@ async fn update_service(
     // Build dynamic update query
     // For simplicity, do a full update with fetched defaults
     let existing = sqlx::query_as::<_, Service>(
-        "SELECT id, systemd_unit, display_name, description, url, icon, group_id, \
+        "SELECT id, systemd_unit, discovery_source, display_name, description, url, icon, group_id, \
          sort_order, probe_enabled, probe_interval, tags, visible, created_at, updated_at \
          FROM services WHERE id = ?",
     )
@@ -142,6 +143,7 @@ async fn update_service(
     };
 
     let display_name = payload.display_name.unwrap_or(existing.display_name);
+    let discovery_source = payload.discovery_source.or(existing.discovery_source);
     let description = payload.description.or(existing.description);
     let url = payload.url.or(existing.url);
     let icon = payload.icon.or(existing.icon);
@@ -156,10 +158,11 @@ async fn update_service(
         .or(existing.tags);
 
     let result = sqlx::query(
-        "UPDATE services SET display_name = ?, description = ?, url = ?, icon = ?, \
+        "UPDATE services SET discovery_source = ?, display_name = ?, description = ?, url = ?, icon = ?, \
          group_id = ?, sort_order = ?, probe_enabled = ?, probe_interval = ?, \
          tags = ?, visible = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
     )
+    .bind(&discovery_source)
     .bind(&display_name)
     .bind(&description)
     .bind(&url)

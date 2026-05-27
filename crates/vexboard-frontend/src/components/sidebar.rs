@@ -88,6 +88,19 @@ pub fn Sidebar() -> impl IntoView {
                     </svg>
                     {move || is_expanded().then(|| view! { <span>"Dashboard"</span> })}
                 </a>
+
+                <a href="/discovered"
+                   class=move || {
+                       if pathname.get().starts_with("/discovered") { "nav-item-active" } else { "nav-item" }
+                   }>
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 7h18"/>
+                        <path d="M6 12h12"/>
+                        <path d="M9 17h6"/>
+                    </svg>
+                    {move || is_expanded().then(|| view! { <span>"Discovered"</span> })}
+                </a>
             </nav>
 
             // Settings cog — pinned to bottom

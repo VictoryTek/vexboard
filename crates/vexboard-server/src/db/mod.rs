@@ -33,6 +33,20 @@ async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
     // Run the init migration manually since we embed it
     let init_sql = include_str!("migrations/001_init.sql");
     sqlx::raw_sql(init_sql).execute(pool).await?;
+
+    // Backfill for existing databases created before discovery_source existed.
+    let has_discovery_source: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pragma_table_info('services') WHERE name = 'discovery_source'",
+    )
+    .fetch_one(pool)
+    .await?;
+
+    if has_discovery_source == 0 {
+        sqlx::query("ALTER TABLE services ADD COLUMN discovery_source TEXT")
+            .execute(pool)
+            .await?;
+    }
+
     tracing::info!("Database migrations applied");
     Ok(())
 }

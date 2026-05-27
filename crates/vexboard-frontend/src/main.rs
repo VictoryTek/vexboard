@@ -64,6 +64,7 @@ fn App() -> impl IntoView {
                 // Main app: sidebar + metric bar wrapping child routes
                 <ParentRoute path=path!("/") view=MainLayout>
                     <Route path=path!("") view=pages::dashboard::DashboardPage />
+                    <Route path=path!("discovered") view=pages::discovered::DiscoveredPage />
                     <Route path=path!("settings") view=pages::settings::SettingsPage />
                 </ParentRoute>
             </Routes>
