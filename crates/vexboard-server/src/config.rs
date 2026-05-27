@@ -8,6 +8,7 @@ pub struct AppConfig {
     pub database: DatabaseConfig,
     pub auth: AuthConfig,
     pub discovery: DiscoveryConfig,
+    pub docker: DockerConfig,
     pub probe: ProbeConfig,
     pub metrics: MetricsConfig,
 }
@@ -35,6 +36,15 @@ pub struct DiscoveryConfig {
     pub enabled: bool,
     pub interval_secs: u64,
     pub exclude_units: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DockerConfig {
+    pub enabled: bool,
+    pub interval_secs: u64,
+    /// Unix socket paths to try in order (Docker then Podman)
+    pub sockets: Vec<String>,
+    pub exclude_images: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

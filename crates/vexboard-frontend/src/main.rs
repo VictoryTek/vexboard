@@ -4,7 +4,7 @@ mod pages;
 use leptos::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use leptos::task::spawn_local;
-use leptos_router::components::{Route, Router, Routes};
+use leptos_router::components::{Outlet, ParentRoute, Route, Router, Routes};
 use leptos_router::path;
 
 fn main() {
@@ -57,20 +57,31 @@ fn App() -> impl IntoView {
 
     view! {
         <Router>
-            <div class="flex h-screen overflow-hidden">
-                <components::sidebar::Sidebar />
-                <main class="flex-1 flex flex-col overflow-hidden">
-                    <components::metric_bar::MetricBar />
-                    <div class="flex-1 overflow-auto p-6">
-                        <Routes fallback=|| view! { <p>"Page not found"</p> }>
-                            <Route path=path!("/") view=pages::dashboard::DashboardPage />
-                            <Route path=path!("/settings") view=pages::settings::SettingsPage />
-                            <Route path=path!("/login") view=pages::login::LoginPage />
-                            <Route path=path!("/setup") view=pages::setup::SetupPage />
-                        </Routes>
-                    </div>
-                </main>
-            </div>
+            <Routes fallback=|| view! { <p>"Page not found"</p> }>
+                // Full-screen bare routes — no sidebar or metric bar
+                <Route path=path!("/setup") view=pages::setup::SetupPage />
+                <Route path=path!("/login") view=pages::login::LoginPage />
+                // Main app: sidebar + metric bar wrapping child routes
+                <ParentRoute path=path!("/") view=MainLayout>
+                    <Route path=path!("") view=pages::dashboard::DashboardPage />
+                    <Route path=path!("settings") view=pages::settings::SettingsPage />
+                </ParentRoute>
+            </Routes>
         </Router>
+    }
+}
+
+#[component]
+fn MainLayout() -> impl IntoView {
+    view! {
+        <div style="display:flex; height:100vh; overflow:hidden;">
+            <components::sidebar::Sidebar />
+            <main style="flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0;">
+                <components::metric_bar::MetricBar />
+                <div style="flex:1; overflow:auto; padding:1.5rem; min-height:0;">
+                    <Outlet />
+                </div>
+            </main>
+        </div>
     }
 }

@@ -56,8 +56,7 @@ pub fn SetupPage() -> impl IntoView {
     };
 
     view! {
-        <div class="flex flex-col items-center justify-center"
-             style="min-height: 80vh; gap: 1.5rem">
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; gap:1.5rem; background-color:var(--color-bg-primary)">
             <div class="text-center">
                 <h1 class="text-xl font-semibold tracking-tight">"Welcome to VexBoard"</h1>
                 <p class="text-xs mt-1" style="color: var(--color-text-muted)">

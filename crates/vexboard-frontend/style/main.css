@@ -47,6 +47,13 @@
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }
 
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+
   body {
     @apply antialiased;
     background-color: var(--color-bg-primary);
@@ -88,13 +95,10 @@
   .sidebar-logo-icon {
     width: 28px;
     height: 28px;
-    border-radius: 8px;
-    background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    box-shadow: 0 0 16px rgba(99, 102, 241, 0.45);
   }
 
   .sidebar-logo-text {

@@ -102,13 +102,16 @@ pub async fn discover_units(
             description: desc.clone(),
             active_state: active_state.clone(),
             sub_state: sub_state.clone(),
+            source: "systemd".to_string(),
+            url_hint: None,
         });
     }
 
-    // Update the shared discovery list
+    // Replace only systemd entries, preserving container discoveries
     let mut list = discoveries.write().await;
-    *list = unclaimed;
-    tracing::debug!(count = list.len(), "Discovery pass complete");
+    list.retain(|u| u.source != "systemd");
+    list.extend(unclaimed);
+    tracing::debug!(count = list.len(), "systemd discovery pass complete");
 
     Ok(())
 }

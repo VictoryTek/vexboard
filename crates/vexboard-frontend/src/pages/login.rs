@@ -46,9 +46,9 @@ pub fn LoginPage() -> impl IntoView {
     };
 
     view! {
-        <div class="flex flex-col items-center justify-center" style="min-height: 80vh; gap: 1.5rem">
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; gap:1.5rem; background-color:var(--color-bg-primary)">
             // Brand
-            <div class="flex flex-col items-center" style="gap: 0.75rem">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:0.75rem">
                 <div style="
                     width: 52px; height: 52px; border-radius: 14px;
                     background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);

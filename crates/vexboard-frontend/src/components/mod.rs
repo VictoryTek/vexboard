@@ -1,3 +1,4 @@
+pub mod discovery_panel;
 pub mod metric_bar;
 pub mod modal_edit;
 pub mod service_card;

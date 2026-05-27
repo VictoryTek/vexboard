@@ -1,3 +1,4 @@
+pub mod docker;
 pub mod systemd;
 
 use axum::{
@@ -14,13 +15,17 @@ use tokio::sync::RwLock;
 
 use crate::AppState;
 
-/// A discovered systemd unit not yet claimed by the user.
+/// A discovered unit (systemd service or container) not yet claimed by the user.
 #[derive(Debug, Clone, Serialize)]
 pub struct DiscoveredUnit {
     pub unit_name: String,
     pub description: String,
     pub active_state: String,
     pub sub_state: String,
+    /// Origin: "systemd", "docker", or "podman"
+    pub source: String,
+    /// Suggested URL if detectable (e.g. from exposed container ports)
+    pub url_hint: Option<String>,
 }
 
 pub type DiscoveryList = Arc<RwLock<Vec<DiscoveredUnit>>>;
@@ -45,13 +50,22 @@ async fn list_discovered(State(state): State<AppState>) -> impl IntoResponse {
 /// Trigger an immediate re-scan of systemd units.
 #[tracing::instrument(skip(state))]
 async fn trigger_refresh(State(state): State<AppState>) -> impl IntoResponse {
-    // Spawn a refresh in the background
+    // Spawn a systemd refresh in the background
     let discoveries = state.discoveries.clone();
     let db = state.db.clone();
     let config = state.config.clone();
     tokio::spawn(async move {
         if let Err(e) = systemd::discover_units(&discoveries, &db, &config.discovery).await {
-            tracing::error!("Discovery refresh failed: {e}");
+            tracing::error!("systemd discovery refresh failed: {e}");
+        }
+    });
+    // Spawn a container refresh in the background
+    let discoveries2 = state.discoveries.clone();
+    let db2 = state.db.clone();
+    let config2 = state.config.clone();
+    tokio::spawn(async move {
+        if let Err(e) = docker::discover_containers(&discoveries2, &db2, &config2.docker).await {
+            tracing::error!("container discovery refresh failed: {e}");
         }
     });
     (

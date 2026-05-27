@@ -1,3 +1,4 @@
+use leptos::either::Either;
 use leptos::prelude::*;
 
 use crate::components::status_badge::StatusDot;
@@ -25,19 +26,38 @@ pub fn ServiceCard(service: ServiceData) -> impl IntoView {
     let latency = service.latency_ms.map(|ms| format!("{ms}ms"));
 
     let first = service.display_name.chars().next().unwrap_or('?');
-    let icon_display = service
-        .icon
-        .clone()
-        .filter(|i| !i.is_empty())
-        .unwrap_or_else(|| first.to_ascii_uppercase().to_string());
+    let letter = first.to_ascii_uppercase().to_string();
+    let icon_opt = service.icon.clone().filter(|i| !i.is_empty());
+    let is_url_icon = icon_opt
+        .as_ref()
+        .map_or(false, |i| i.starts_with("http://") || i.starts_with("https://"));
+    let icon_text = if is_url_icon {
+        letter.clone()
+    } else {
+        icon_opt.clone().unwrap_or(letter)
+    };
+    let icon_url = if is_url_icon { icon_opt } else { None };
 
     view! {
         <div class="service-card">
             // Header: icon + name/description + status badge
             <div class="flex items-start justify-between gap-3">
                 <div class="flex items-center gap-3 min-w-0">
-                    <div class="service-icon">
-                        <span>{icon_display}</span>
+                    <div class="service-icon" style="position:relative;">
+                        <span>{icon_text}</span>
+                        {icon_url.map(|src| view! {
+                            <img src={src} alt=""
+                                style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;border-radius:inherit;padding:3px;"
+                                on:error=move |ev| {
+                                    use wasm_bindgen::JsCast;
+                                    if let Some(t) = ev.target() {
+                                        if let Ok(el) = t.dyn_into::<web_sys::HtmlElement>() {
+                                            let _ = el.style().set_property("display", "none");
+                                        }
+                                    }
+                                }
+                            />
+                        })}
                     </div>
                     <div class="min-w-0 flex-1">
                         <h3 class="text-sm font-semibold truncate leading-tight"

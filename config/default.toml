@@ -23,6 +23,16 @@ exclude_units = [
   "systemd-*.service",
 ]
 
+[docker]
+enabled = true
+interval_secs = 60
+# Unix sockets tried in order — missing sockets are silently skipped
+sockets = [
+  "/var/run/docker.sock",
+  "/run/podman/podman.sock",
+]
+exclude_images = []
+
 [probe]
 default_interval_secs = 30
 timeout_secs = 5

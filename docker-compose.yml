@@ -11,6 +11,8 @@ services:
     volumes:
       - vexboard_data:/var/lib/vexboard
       - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /run/podman/podman.sock:/run/podman/podman.sock:ro
     environment:
       VEXBOARD_AUTH_SECRET: "change-me"
       VEXBOARD_SERVER__PORT: "7280"

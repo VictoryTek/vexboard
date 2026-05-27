@@ -67,13 +67,8 @@ pub fn Sidebar() -> impl IntoView {
             // Logo / brand
             <div class="sidebar-logo">
                 <div class="sidebar-logo-icon">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white"
-                         stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="3" y="3" width="7" height="7" rx="1.5"/>
-                        <rect x="14" y="3" width="7" height="7" rx="1.5"/>
-                        <rect x="3" y="14" width="7" height="7" rx="1.5"/>
-                        <rect x="14" y="14" width="7" height="7" rx="1.5"/>
-                    </svg>
+                    <img src="/vexboard-logo.png" alt="VexBoard"
+                         style="width:28px;height:28px;object-fit:contain;" />
                 </div>
                 {move || is_expanded().then(|| view! {
                     <span class="sidebar-logo-text">"VexBoard"</span>
@@ -81,7 +76,7 @@ pub fn Sidebar() -> impl IntoView {
             </div>
 
             // Navigation
-            <nav class="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
+            <nav style="flex:1; overflow-y:auto; padding:0.75rem 0.5rem;" class="space-y-0.5">
                 <a href="/"
                    class=move || if pathname.get() == "/" { "nav-item-active" } else { "nav-item" }>
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"

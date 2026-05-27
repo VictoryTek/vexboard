@@ -14,7 +14,7 @@ use std::sync::Arc;
 use sqlx::SqlitePool;
 use tokio::sync::broadcast;
 use tower_http::cors::{Any, CorsLayer};
-use tower_http::services::ServeDir;
+use tower_http::services::{ServeDir, ServeFile};
 use tower_sessions::{MemoryStore, SessionManagerLayer};
 
 use crate::config::AppConfig;
@@ -77,6 +77,13 @@ async fn main() -> anyhow::Result<()> {
         discovery::systemd::discovery_loop(disc_list, disc_db, disc_config).await;
     });
 
+    let docker_config = config.docker.clone();
+    let docker_db = db.clone();
+    let docker_list = discoveries.clone();
+    tokio::spawn(async move {
+        discovery::docker::docker_discovery_loop(docker_list, docker_db, docker_config).await;
+    });
+
     let probe_config = config.probe.clone();
     let probe_db = db.clone();
     let probe_tx_clone = probe_tx.clone();
@@ -97,12 +104,17 @@ async fn main() -> anyhow::Result<()> {
 
     let app = api::router().with_state(state).layer(session_layer);
 
-    // Serve static assets if configured
-    let app = if config.server.assets_path != "embedded" {
-        app.fallback_service(ServeDir::new(&config.server.assets_path))
+    // Serve static assets — fall back to index.html for any unmatched path so
+    // that the Leptos client-side router handles routes like /setup and /login.
+    let assets_root = if config.server.assets_path != "embedded" {
+        config.server.assets_path.clone()
     } else {
-        app.fallback_service(ServeDir::new("assets"))
+        "assets".to_string()
     };
+    let app = app.fallback_service(
+        ServeDir::new(&assets_root)
+            .fallback(ServeFile::new(format!("{}/index.html", assets_root))),
+    );
 
     // Add CORS for development
     let app = app.layer(

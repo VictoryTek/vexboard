@@ -27,8 +27,9 @@ RUN curl -sSfL \
     https://github.com/trunk-rs/trunk/releases/latest/download/trunk-x86_64-unknown-linux-musl.tar.gz \
     | tar -xz -C /usr/local/bin trunk
 COPY --from=planner /build/recipe.json recipe.json
-# Pre-build WASM dependencies — cached until Cargo.lock changes
-RUN cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json
+# Pre-build WASM dependencies — scoped to frontend only to avoid server-side
+# native deps (mio/tokio-net) that cannot compile for wasm32-unknown-unknown
+RUN cargo chef cook --release --target wasm32-unknown-unknown --package vexboard-frontend --recipe-path recipe.json
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
 WORKDIR /build/crates/vexboard-frontend
