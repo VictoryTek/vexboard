@@ -66,7 +66,7 @@ async fn discover_from_socket(
     db: &SqlitePool,
     exclude_images: &[String],
 ) -> anyhow::Result<Vec<DiscoveredUnit>> {
-    let docker = Docker::connect_with_socket(socket, 10, &bollard::API_DEFAULT_VERSION)?;
+    let docker = Docker::connect_with_socket(socket, 10, bollard::API_DEFAULT_VERSION)?;
 
     // Quick connectivity check
     docker.ping().await?;
