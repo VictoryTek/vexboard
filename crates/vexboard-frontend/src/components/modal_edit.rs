@@ -23,6 +23,7 @@ pub struct EditFormData {
     pub description: String,
     pub url: String,
     pub icon: String,
+    #[allow(dead_code)]
     pub group_id: Option<i64>,
     pub probe_enabled: bool,
     pub probe_interval: i64,

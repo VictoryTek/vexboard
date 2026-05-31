@@ -30,7 +30,7 @@ pub fn ServiceCard(service: ServiceData, #[prop(into)] on_delete: Callback<i64>)
     let first = service.display_name.chars().next().unwrap_or('?');
     let letter = first.to_ascii_uppercase().to_string();
     let icon_opt = service.icon.clone().filter(|i| !i.is_empty());
-    let is_url_icon = icon_opt.as_ref().map_or(false, |i| {
+    let is_url_icon = icon_opt.as_ref().is_some_and(|i| {
         i.starts_with("http://") || i.starts_with("https://")
     });
     let icon_text = if is_url_icon {
