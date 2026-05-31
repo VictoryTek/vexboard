@@ -15,15 +15,66 @@ session_ttl_hours = 168  # 7 days
 [discovery]
 enabled = true
 interval_secs = 60
-# Only show services whose unit file is in /etc/systemd/system/ (admin-installed server
-# services). Set to false to also show OS-managed services from /lib/systemd/system/.
+# When true, only show services with sub_state="running" (drops one-shot boot services).
+# Pair this with exclude_units to filter out OS-managed daemons.
 server_services_only = true
-# systemd units to always exclude from discovery
+# systemd units to always exclude from discovery.
+# Patterns support a single '*' wildcard.
 exclude_units = [
-  "user@.service",
-  "getty@.service",
-  "dbus.service",
+  # systemd infrastructure
   "systemd-*.service",
+  "user@*.service",
+  "getty@*.service",
+  "dbus.service",
+  # networking OS services
+  "NetworkManager.service",
+  "NetworkManager-wait-online.service",
+  "NetworkManager-dispatcher.service",
+  "wpa_supplicant.service",
+  "ModemManager.service",
+  "firewall.service",
+  "nftables.service",
+  "iptables.service",
+  # printing
+  "cups.service",
+  "cups-browsed.service",
+  # DNS / mDNS / name resolution
+  "avahi-daemon.service",
+  "nscd.service",
+  # Bluetooth & audio
+  "bluetooth.service",
+  "rtkit-daemon.service",
+  # display & session
+  "display-manager.service",
+  "colord.service",
+  # boot / init helpers
+  "plymouth-*.service",
+  "kmod-static-nodes.service",
+  # security & auth
+  "polkit.service",
+  "apparmor.service",
+  "accounts-daemon.service",
+  # hardware management
+  "udisks2.service",
+  "upower.service",
+  "acpid.service",
+  "power-profiles-daemon.service",
+  "bolt.service",
+  # virtualisation infrastructure
+  "libvirtd.service",
+  "libvirt-guests.service",
+  # NFS / RPC
+  "rpcbind.service",
+  "rpc-statd-notify.service",
+  # Flatpak
+  "flatpak-*.service",
+  # NixOS-specific
+  "nix-daemon.service",
+  "cpufreq.service",
+  "scx.service",
+  # misc OS daemons
+  "samba-wsdd.service",
+  "logrotate-checkconf.service",
 ]
 
 [docker]
