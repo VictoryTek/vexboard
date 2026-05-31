@@ -79,7 +79,7 @@ pub async fn discover_units(
                 Path::new(&path)
                     .file_name()
                     .and_then(|n| n.to_str())
-                    .map(|name| (name.to_string(), path))
+                    .map(|name| (name.to_string(), path.clone()))
             })
             .collect();
         Some(map)
