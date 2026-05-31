@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::path::Path;
 use std::time::Duration;
 
 use sqlx::SqlitePool;
@@ -14,6 +16,7 @@ use crate::discovery::{DiscoveredUnit, DiscoveryList};
 )]
 trait Manager {
     fn list_units(&self) -> zbus::Result<Vec<UnitInfo>>;
+    fn list_unit_files(&self) -> zbus::Result<Vec<(String, String)>>;
 }
 
 #[derive(Debug, zvariant::Type, serde::Deserialize)]
@@ -63,6 +66,27 @@ pub async fn discover_units(
     // ListUnits returns Vec of unit structs
     let units = proxy.list_units().await?;
 
+    // If server_services_only is enabled, build a map of unit_name → fragment_path
+    // using ListUnitFiles(). Services whose fragment path lives under
+    // /etc/systemd/system/ were explicitly installed/enabled by an admin (server
+    // services). Services under /lib/systemd/system/ or /usr/lib/systemd/system/
+    // are OS package-managed and are excluded.
+    let fragment_paths: Option<HashMap<String, String>> = if config.server_services_only {
+        let files = proxy.list_unit_files().await.unwrap_or_default();
+        let map = files
+            .into_iter()
+            .filter_map(|(path, _)| {
+                Path::new(&path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|name| (name.to_string(), path))
+            })
+            .collect();
+        Some(map)
+    } else {
+        None
+    };
+
     let mut unclaimed = Vec::new();
 
     for unit in &units {
@@ -78,6 +102,15 @@ pub async fn discover_units(
         }
         if load_state != "loaded" || active_state != "active" {
             continue;
+        }
+
+        // If server_services_only: only include units whose fragment file lives
+        // under /etc/systemd/system/ (admin-installed server services).
+        if let Some(ref map) = fragment_paths {
+            match map.get(name.as_str()) {
+                Some(path) if path.starts_with("/etc/systemd/system/") => {}
+                _ => continue,
+            }
         }
 
         // Check exclusion patterns

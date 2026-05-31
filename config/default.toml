@@ -15,6 +15,9 @@ session_ttl_hours = 168  # 7 days
 [discovery]
 enabled = true
 interval_secs = 60
+# Only show services whose unit file is in /etc/systemd/system/ (admin-installed server
+# services). Set to false to also show OS-managed services from /lib/systemd/system/.
+server_services_only = true
 # systemd units to always exclude from discovery
 exclude_units = [
   "user@.service",

@@ -36,6 +36,15 @@ pub struct DiscoveryConfig {
     pub enabled: bool,
     pub interval_secs: u64,
     pub exclude_units: Vec<String>,
+    /// When true, only show services whose unit file lives under /etc/systemd/system/
+    /// (i.e. explicitly installed/enabled by an admin), filtering out OS-managed
+    /// services from /lib/systemd/system/ or /usr/lib/systemd/system/.
+    #[serde(default = "default_true")]
+    pub server_services_only: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Deserialize)]
