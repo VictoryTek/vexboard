@@ -435,4 +435,27 @@
     justify-content: center;
     color: var(--color-text-muted);
   }
+
+  /* ── User Menu ── */
+  .user-menu { position: relative; display: flex; align-items: center; }
+  .user-menu-trigger { display: flex; align-items: center; gap: 8px; cursor: pointer; background: none; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; padding: 4px 10px; color: inherit; font-size: 0.9rem; }
+  .user-menu-avatar { width: 28px; height: 28px; border-radius: 50%; background: #4a90d9; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.8rem; text-transform: uppercase; }
+  .user-menu-dropdown { display: none; position: absolute; top: calc(100% + 6px); right: 0; min-width: 200px; background: #1e2a38; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 200; padding: 8px 0; }
+  .user-menu-dropdown.open { display: block; }
+  .user-menu-dropdown-username { padding: 10px 16px; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 4px; }
+  .user-menu-item { display: block; width: 100%; text-align: left; background: none; border: none; padding: 8px 16px; color: inherit; cursor: pointer; font-size: 0.9rem; }
+  .user-menu-item:hover { background: rgba(255,255,255,0.06); }
+  .user-menu-item.danger { color: #e05c5c; }
+
+  /* ── Account Settings Modal ── */
+  .acct-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 300; display: flex; align-items: center; justify-content: center; }
+  .acct-modal { background: #1e2a38; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 28px 32px; min-width: 340px; max-width: 420px; width: 100%; }
+  .acct-modal h3 { margin: 0 0 20px; font-size: 1.1rem; }
+  .acct-modal .form-group { margin-bottom: 14px; }
+  .acct-modal .form-group label { display: block; font-size: 0.82rem; margin-bottom: 4px; opacity: 0.7; }
+  .acct-modal .form-group input { width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.05); color: inherit; font-size: 0.9rem; }
+  .acct-modal .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+  .acct-modal .pam-notice { font-size: 0.85rem; opacity: 0.65; font-style: italic; margin: 8px 0 16px; }
+  .acct-modal .error-msg { color: #e05c5c; font-size: 0.85rem; margin-top: 8px; }
+  .acct-modal .success-msg { color: #5ce07a; font-size: 0.85rem; margin-top: 8px; }
 }

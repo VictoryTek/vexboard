@@ -1,6 +1,8 @@
 use leptos::prelude::*;
 use serde::Deserialize;
 
+use super::UserMenu;
+
 #[derive(Debug, Clone, Deserialize, Default)]
 #[allow(dead_code)]
 pub struct SystemMetrics {
@@ -159,6 +161,9 @@ pub fn MetricBar() -> impl IntoView {
                         }
                     }}
                 </span>
+            </div>
+            <div style="margin-left: auto;">
+                <UserMenu />
             </div>
         </div>
     }
