@@ -42,7 +42,11 @@ pub async fn discover_containers(
         if !std::path::Path::new(socket).exists() {
             continue;
         }
-        let source = if socket.contains("podman") { "podman" } else { "docker" };
+        let source = if socket.contains("podman") {
+            "podman"
+        } else {
+            "docker"
+        };
         match discover_from_socket(socket, source, db, &config.exclude_images).await {
             Ok(mut units) => all.append(&mut units),
             Err(e) => tracing::debug!(%socket, "socket query failed: {e}"),
@@ -83,7 +87,11 @@ async fn discover_from_socket(
             .and_then(|n| n.first())
             .map(|n| n.trim_start_matches('/').to_string())
             .unwrap_or_else(|| {
-                c.id.as_deref().unwrap_or("unknown").chars().take(12).collect()
+                c.id.as_deref()
+                    .unwrap_or("unknown")
+                    .chars()
+                    .take(12)
+                    .collect()
             });
 
         let image = c.image.as_deref().unwrap_or("unknown").to_string();

@@ -112,8 +112,7 @@ async fn main() -> anyhow::Result<()> {
         "assets".to_string()
     };
     let app = app.fallback_service(
-        ServeDir::new(&assets_root)
-            .fallback(ServeFile::new(format!("{}/index.html", assets_root))),
+        ServeDir::new(&assets_root).fallback(ServeFile::new(format!("{}/index.html", assets_root))),
     );
 
     // Add CORS for development

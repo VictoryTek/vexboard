@@ -47,7 +47,9 @@ async fn fetch_discovered_units() -> Vec<DiscoveredUnitFe> {
     if !resp.ok() {
         return Vec::new();
     }
-    resp.json::<Vec<DiscoveredUnitFe>>().await.unwrap_or_default()
+    resp.json::<Vec<DiscoveredUnitFe>>()
+        .await
+        .unwrap_or_default()
 }
 
 #[component]
