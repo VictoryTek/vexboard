@@ -41,7 +41,8 @@ struct QuickLinkResponse {
 #[component]
 pub fn DashboardPage() -> impl IntoView {
     let services = LocalResource::new(|| async move { fetch_services().await.unwrap_or_default() });
-    let quick_links = LocalResource::new(|| async move { fetch_quick_links().await.unwrap_or_default() });
+    let quick_links =
+        LocalResource::new(|| async move { fetch_quick_links().await.unwrap_or_default() });
 
     let (show_modal, set_show_modal) = signal(false);
     let (show_add_menu, set_show_add_menu) = signal(false);
@@ -420,11 +421,15 @@ pub fn DashboardPage() -> impl IntoView {
 }
 
 async fn fetch_services() -> Result<Vec<ServiceResponse>, gloo_net::Error> {
-    let resp = gloo_net::http::Request::get("/api/v1/services").send().await?;
+    let resp = gloo_net::http::Request::get("/api/v1/services")
+        .send()
+        .await?;
     Ok(resp.json().await?)
 }
 
 async fn fetch_quick_links() -> Result<Vec<QuickLinkResponse>, gloo_net::Error> {
-    let resp = gloo_net::http::Request::get("/api/v1/quick-links").send().await?;
+    let resp = gloo_net::http::Request::get("/api/v1/quick-links")
+        .send()
+        .await?;
     Ok(resp.json().await?)
 }

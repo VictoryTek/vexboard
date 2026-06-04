@@ -13,7 +13,10 @@ use crate::AppState;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(list_quick_links).post(create_quick_link))
-        .route("/{id}", axum::routing::put(update_quick_link).delete(delete_quick_link))
+        .route(
+            "/{id}",
+            axum::routing::put(update_quick_link).delete(delete_quick_link),
+        )
 }
 
 async fn list_quick_links(State(state): State<AppState>) -> impl IntoResponse {
@@ -71,14 +74,23 @@ async fn update_quick_link(
         Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Not found"}))),
         Err(e) => {
             tracing::error!("DB error: {e}");
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"})));
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Database error"})),
+            );
         }
     };
 
     let title = payload.title.unwrap_or(existing.title);
     let url = payload.url.unwrap_or(existing.url);
-    let icon = payload.icon.map(|v| if v.is_empty() { None } else { Some(v) }).unwrap_or(existing.icon);
-    let description = payload.description.map(|v| if v.is_empty() { None } else { Some(v) }).unwrap_or(existing.description);
+    let icon = payload
+        .icon
+        .map(|v| if v.is_empty() { None } else { Some(v) })
+        .unwrap_or(existing.icon);
+    let description = payload
+        .description
+        .map(|v| if v.is_empty() { None } else { Some(v) })
+        .unwrap_or(existing.description);
     let sort_order = payload.sort_order.unwrap_or(existing.sort_order);
 
     match sqlx::query(
@@ -97,7 +109,10 @@ async fn update_quick_link(
         Ok(_) => (StatusCode::OK, Json(json!({"status": "updated"}))),
         Err(e) => {
             tracing::error!("Failed to update quick link: {e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to update quick link"})))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to update quick link"})),
+            )
         }
     }
 }
@@ -115,7 +130,10 @@ async fn delete_quick_link(
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Not found"}))),
         Err(e) => {
             tracing::error!("Failed to delete quick link: {e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to delete quick link"})))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to delete quick link"})),
+            )
         }
     }
 }
