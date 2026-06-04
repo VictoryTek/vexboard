@@ -424,12 +424,12 @@ async fn fetch_services() -> Result<Vec<ServiceResponse>, gloo_net::Error> {
     let resp = gloo_net::http::Request::get("/api/v1/services")
         .send()
         .await?;
-    Ok(resp.json().await?)
+    resp.json().await
 }
 
 async fn fetch_quick_links() -> Result<Vec<QuickLinkResponse>, gloo_net::Error> {
     let resp = gloo_net::http::Request::get("/api/v1/quick-links")
         .send()
         .await?;
-    Ok(resp.json().await?)
+    resp.json().await
 }
