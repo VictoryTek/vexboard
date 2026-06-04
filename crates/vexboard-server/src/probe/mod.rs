@@ -21,7 +21,7 @@ pub async fn start_probe_loop(
     loop {
         // Fetch all services that have probing enabled and a URL set
         let services = sqlx::query_as::<_, crate::db::models::Service>(
-            "SELECT id, systemd_unit, display_name, description, url, icon, group_id, \
+            "SELECT id, systemd_unit, discovery_source, display_name, description, url, icon, group_id, \
              sort_order, probe_enabled, probe_interval, tags, visible, created_at, updated_at \
              FROM services WHERE probe_enabled = 1 AND url IS NOT NULL",
         )

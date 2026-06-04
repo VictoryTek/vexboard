@@ -119,3 +119,31 @@ pub struct ServiceWithStatus {
     pub status: String,
     pub latency_ms: Option<i64>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct QuickLink {
+    pub id: i64,
+    pub title: String,
+    pub url: String,
+    pub icon: Option<String>,
+    pub description: Option<String>,
+    pub sort_order: i64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateQuickLink {
+    pub title: String,
+    pub url: String,
+    pub icon: Option<String>,
+    pub description: Option<String>,
+    pub sort_order: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateQuickLink {
+    pub title: Option<String>,
+    pub url: Option<String>,
+    pub icon: Option<String>,
+    pub description: Option<String>,
+    pub sort_order: Option<i64>,
+}

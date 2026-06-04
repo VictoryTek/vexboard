@@ -17,7 +17,11 @@ pub struct ServiceData {
 }
 
 #[component]
-pub fn ServiceCard(service: ServiceData, #[prop(into)] on_delete: Callback<i64>) -> impl IntoView {
+pub fn ServiceCard(
+    service: ServiceData,
+    #[prop(into)] on_delete: Callback<i64>,
+    #[prop(into)] on_edit: Callback<i64>,
+) -> impl IntoView {
     let service_id = service.id;
     let (badge_cls, status_label) = match service.status.as_str() {
         "up" => ("status-badge status-badge-up", "Up"),
@@ -69,22 +73,26 @@ pub fn ServiceCard(service: ServiceData, #[prop(into)] on_delete: Callback<i64>)
         .filter(|d| !d.trim().is_empty())
         .or_else(|| service.url.clone());
 
-    view! {
-        <div class="service-card" style="position:relative;">
-            {source_badge.clone().map(|(label, color)| view! {
-                <span style=format!(
-                    "position:absolute; top:0.65rem; right:0.65rem; display:inline-block; \
-                     font-size:0.6rem; font-weight:700; letter-spacing:0.06em; \
-                     text-transform:uppercase; color:{color}; background:{color}22; \
-                     border-radius:0.25rem; padding:0.1rem 0.4rem;"
-                )>
-                    {label}
-                </span>
-            })}
+    let url_href = service.url.clone().unwrap_or_default();
+    let has_url = service.url.is_some();
+    let card_style = if has_url {
+        "display:block; text-decoration:none; cursor:pointer;"
+    } else {
+        "display:block; text-decoration:none; cursor:default; pointer-events:none;"
+    };
 
-            <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:0.75rem; padding-right:0.1rem;">
-                <div style="display:flex; align-items:flex-start; gap:0.75rem; min-width:0; flex:1;">
-                    <div class="service-icon" style="position:relative; margin-top:0.05rem;">
+    view! {
+        <a
+            href={url_href}
+            target={if has_url { "_blank" } else { "_self" }}
+            rel="noopener noreferrer"
+            class="service-card"
+            style={card_style}
+        >
+            // Top row: icon + title (left) | source badge (right)
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; margin-bottom:0.35rem;">
+                <div style="display:flex; align-items:center; gap:0.75rem; min-width:0; flex:1;">
+                    <div class="service-icon" style="position:relative; flex-shrink:0;">
                         <span>{icon_text}</span>
                         {icon_url.map(|src| view! {
                             <img src={src} alt=""
@@ -100,76 +108,80 @@ pub fn ServiceCard(service: ServiceData, #[prop(into)] on_delete: Callback<i64>)
                             />
                         })}
                     </div>
-                    <div style="min-width:0; flex:1; padding-right:0.25rem;">
-                        <p style="font-size:1rem; font-weight:600; line-height:1.15; color:var(--color-text-primary); margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                            {service.display_name}
-                        </p>
-                        {summary.map(|d| view! {
-                            <p style="font-size:0.8rem; line-height:1.25; color:var(--color-text-secondary); margin:0.2rem 0 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                                {d}
-                            </p>
-                        })}
-                    </div>
+                    <p style="font-size:1rem; font-weight:600; line-height:1.15; color:var(--color-text-primary); margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        {service.display_name}
+                    </p>
                 </div>
 
-                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:0.35rem; flex-shrink:0; margin-top:0.2rem;">
-                    <div class={badge_cls}>
-                        <StatusDot status=service.status.clone()/>
-                        <span>{status_label}</span>
-                        {latency.map(|lat| view! {
-                            <span style="font-size:0.65rem;font-weight:400;opacity:0.65;text-transform:none;letter-spacing:0">
-                                {lat}
-                            </span>
-                        })}
-                    </div>
-                </div>
+                {source_badge.clone().map(|(label, color)| view! {
+                    <span style=format!(
+                        "flex-shrink:0; display:inline-flex; align-items:center; \
+                         font-size:0.68rem; font-weight:700; letter-spacing:0.04em; \
+                         text-transform:uppercase; color:{color}; background:{color}22; \
+                         border:1px solid {color}40; border-radius:20px; padding:3px 9px;"
+                    )>
+                        {label}
+                    </span>
+                })}
             </div>
 
-            // URL footer
-            {service.url.as_ref().map(|url| view! {
-                <div class="mt-3 pt-3" style="border-top: 1px solid var(--color-border)">
-                    <a
-                        href={url.clone()}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="flex items-center gap-1.5 text-xs transition-colors"
-                        style="color: var(--color-text-muted)"
-                        onmouseover="this.style.color='var(--color-accent)'"
-                        onmouseout="this.style.color='var(--color-text-muted)'"
+            // Description row
+            {summary.map(|d| view! {
+                <p style="font-size:0.8rem; line-height:1.25; color:var(--color-text-secondary); margin:0 0 0.1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    {d}
+                </p>
+            })}
+
+            // Bottom row: status badge (left) | edit + remove (right)
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:0.4rem;"
+                on:click=move |ev| { ev.prevent_default(); ev.stop_propagation(); }
+            >
+                <div class={badge_cls}>
+                    <StatusDot status=service.status.clone()/>
+                    <span>{status_label}</span>
+                    {latency.map(|lat| view! {
+                        <span style="font-size:0.65rem;font-weight:400;opacity:0.65;text-transform:none;letter-spacing:0">
+                            {lat}
+                        </span>
+                    })}
+                </div>
+                <div style="display:flex; align-items:center; gap:0.75rem;">
+                    <button
+                        style="background:none; border:none; cursor:pointer; \
+                               color:var(--color-text-muted); opacity:0.35; padding:0.15rem 0; \
+                               font-size:0.7rem; display:flex; align-items:center; gap:0.25rem; \
+                               line-height:1;"
+                        onmouseover="this.style.opacity='1'; this.style.color='var(--color-accent)'"
+                        onmouseout="this.style.opacity='0.35'; this.style.color='var(--color-text-muted)'"
+                        on:click=move |_| on_edit.run(service_id)
                     >
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
                              stroke="currentColor" stroke-width="2"
-                             stroke-linecap="round" stroke-linejoin="round"
-                             style="flex-shrink:0">
-                            <circle cx="12" cy="12" r="10"/>
-                            <line x1="2" y1="12" x2="22" y2="12"/>
-                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                         </svg>
-                        <span class="truncate">{url.clone()}</span>
-                    </a>
+                        "Edit"
+                    </button>
+                    <button
+                        style="background:none; border:none; cursor:pointer; \
+                               color:var(--color-text-muted); opacity:0.35; padding:0.15rem 0; \
+                               font-size:0.7rem; display:flex; align-items:center; gap:0.25rem; \
+                               line-height:1;"
+                        onmouseover="this.style.opacity='1'; this.style.color='var(--color-danger)'"
+                        onmouseout="this.style.opacity='0.35'; this.style.color='var(--color-text-muted)'"
+                        on:click=move |_| on_delete.run(service_id)
+                    >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2"
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                        </svg>
+                        "Remove"
+                    </button>
                 </div>
-            })}
-
-            // Delete action
-            <div style="display:flex; justify-content:flex-end; margin-top:0.4rem;">
-                <button
-                    style="background:none; border:none; cursor:pointer; \
-                           color:var(--color-text-muted); opacity:0.35; padding:0.15rem 0; \
-                           font-size:0.7rem; display:flex; align-items:center; gap:0.25rem; \
-                           line-height:1;"
-                    onmouseover="this.style.opacity='1'; this.style.color='var(--color-danger)'"
-                    onmouseout="this.style.opacity='0.35'; this.style.color='var(--color-text-muted)'"
-                    on:click=move |_| on_delete.run(service_id)
-                >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="2"
-                         stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="3 6 5 6 21 6"/>
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-                    </svg>
-                    "Remove"
-                </button>
             </div>
-        </div>
+        </a>
     }
 }
