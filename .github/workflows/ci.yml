@@ -25,7 +25,8 @@ jobs:
       - name: Cache cargo registry & build
         uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: "v2"
+          prefix-key: "v3"
+          cache-targets: "false"
 
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -53,8 +54,9 @@ jobs:
       - name: Cache cargo registry, build & tools
         uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: "v2"
+          prefix-key: "v3"
           key: wasm
+          cache-targets: "false"
 
       - name: Install Trunk
         run: which trunk || cargo install trunk --locked
