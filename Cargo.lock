@@ -4253,6 +4253,7 @@ name = "vexboard-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "bcrypt",
  "bollard",
@@ -4265,6 +4266,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "thiserror 2.0.18",
+ "time",
  "tokio",
  "tokio-stream",
  "tower",

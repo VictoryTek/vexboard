@@ -251,11 +251,8 @@ VexBoard is a well-architected, actively developed project with solid fundamenta
 
 ### 2.2 Feature Recommendations
 
-**1. Persistent SQLite-backed session store**
-- **Problem:** The current `MemoryStore` loses all sessions on server restart, forcing all users to re-login after any update or crash. Already flagged as a TODO at `main.rs:102`.
-- **Value:** Dramatically improves operator experience in production.
-- **Complexity:** Low — `tower-sessions-sqlx-store` or a custom SQLite table implementation.
-- **Builds on:** Existing `sqlx` pool in `AppState`, existing session layer setup in `main.rs:101–105`.
+**1. ✅ DONE (2026-06-05) — Persistent SQLite-backed session store**
+- `tower-sessions-sqlx-store 0.15.0` had a hard version mismatch with our `tower-sessions 0.15` (core trait version collision). Implemented a custom `SqliteSessionStore` in `crates/vexboard-server/src/session_store.rs` using `#[async_trait]`, `serde_json`, and `time` — all already in the dependency graph. Sessions now persist across restarts in the existing SQLite database (`tower_sessions` table, created by `migrate()` at startup).
 
 **2. CORS origin allowlist via configuration**
 - **Problem:** Allow-all CORS is a security liability for production deployments behind a reverse proxy with a known origin.

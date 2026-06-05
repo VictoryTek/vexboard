@@ -4,6 +4,7 @@ mod db;
 mod discovery;
 mod metrics;
 mod probe;
+mod session_store;
 
 #[cfg(all(unix, feature = "pam-auth"))]
 mod pam_auth;
@@ -15,7 +16,7 @@ use sqlx::SqlitePool;
 use tokio::sync::broadcast;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
-use tower_sessions::{MemoryStore, SessionManagerLayer};
+use tower_sessions::SessionManagerLayer;
 
 use crate::config::AppConfig;
 use crate::discovery::DiscoveryList;
@@ -97,8 +98,9 @@ async fn main() -> anyhow::Result<()> {
         metrics::system::metrics_loop(metrics_tx_clone, metrics_interval).await;
     });
 
-    // Build router
-    let session_store = MemoryStore::default();
+    // Build router — use a SQLite-backed session store so sessions survive restarts.
+    let session_store = session_store::SqliteSessionStore::new(db.clone());
+    session_store.migrate().await?;
     let session_layer =
         SessionManagerLayer::new(session_store).with_secure(config.auth.secure_cookies);
 

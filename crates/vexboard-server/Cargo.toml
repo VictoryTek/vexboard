@@ -24,6 +24,8 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 config = { workspace = true }
 tower-sessions = { workspace = true }
+async-trait = "0.1"
+time = { version = "0.3", features = ["serde"] }
 bcrypt = { workspace = true }
 chrono = { workspace = true }
 anyhow = { workspace = true }
