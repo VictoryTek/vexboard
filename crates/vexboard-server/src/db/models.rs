@@ -37,13 +37,6 @@ pub struct User {
     pub created_at: Option<NaiveDateTime>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(dead_code)]
-pub struct Setting {
-    pub key: String,
-    pub value: String,
-}
-
 // --- Request/Response DTOs ---
 
 #[derive(Debug, Deserialize)]

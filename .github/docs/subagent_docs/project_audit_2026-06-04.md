@@ -25,7 +25,7 @@ The separation is intentional and well-enforced. The backend uses a standard Axu
 
 | Location | Type | Severity | Notes |
 |---|---|---|---|
-| `crates/vexboard-server/src/db/models.rs:50–54` | Struct `Setting` defined but never instantiated or used anywhere | 🟡 Medium | Suggests a planned feature (persistent settings store) that was never implemented |
+| ~~`crates/vexboard-server/src/db/models.rs:50–54`~~ | ~~Struct `Setting` defined but never instantiated or used anywhere~~ | 🟡 Medium ✅ FIXED (2026-06-05) | Deleted |
 | `crates/vexboard-frontend/src/components/modal_edit.rs:26` | `#[allow(dead_code)] pub group_id: Option<i64>` — field declared but never used in form submission | 🔵 Low | Placeholder for group assignment UI |
 | `crates/vexboard-frontend/src/components/discovery_panel.rs:10,12` | `active_state` and `sub_state` fields in `DiscoveredUnitFe` — deserialized but never rendered in UI | 🔵 Low | Planned display feature |
 | `crates/vexboard-frontend/src/pages/discovered.rs` | 6-line stub page, no real content | 🔵 Low | Placeholder page route |
@@ -40,15 +40,15 @@ The separation is intentional and well-enforced. The backend uses a standard Axu
 
 - `crates/vexboard-server/src/api/services.rs:98–102` and `crates/vexboard-server/src/discovery/docker.rs:117–123`: Both use `SELECT COUNT(*)` for duplicate detection before insert. This is a classic TOCTOU (time-of-check/time-of-use) race — two concurrent requests can both pass the check and both insert. The database `UNIQUE` constraint on `systemd_unit` catches this at the DB level, but the error is returned as `500 InternalServerError` rather than `409 Conflict`, which is misleading to callers.
 
-- `crates/vexboard-server/src/api/services.rs:33–54`: **N+1 query** in `list_services`. For every service returned by `SELECT * FROM services`, a second query `SELECT ... FROM probe_results WHERE service_id = ?` is issued in a loop. With 100 services this becomes 101 database round-trips. Should be replaced with a `LEFT JOIN` or a window function CTE.
+- ~~`crates/vexboard-server/src/api/services.rs:33–54`: **N+1 query** in `list_services`. For every service returned by `SELECT * FROM services`, a second query `SELECT ... FROM probe_results WHERE service_id = ?` is issued in a loop. With 100 services this becomes 101 database round-trips. Should be replaced with a `LEFT JOIN` or a window function CTE.~~ ✅ FIXED (2026-06-04) — replaced with a single `LEFT JOIN` query fetching all latest probe results.
 
 - `crates/vexboard-server/src/api/services.rs:73–74`: Tags serialization failure silently falls back to an empty string via `.unwrap_or_default()`, causing silent data loss.
 
 **Unhandled error paths / silent failures:**
 
-- `crates/vexboard-server/src/probe/uptime.rs:67–73`: Both `sqlx::query().execute()` calls and the broadcast `tx.send()` use `let _ = ...` — errors are completely swallowed with no logging. Probe results may fail to persist without any diagnostic trail.
+- ~~`crates/vexboard-server/src/probe/uptime.rs:67–73`: Both `sqlx::query().execute()` calls and the broadcast `tx.send()` use `let _ = ...` — errors are completely swallowed with no logging. Probe results may fail to persist without any diagnostic trail.~~ ✅ FIXED (2026-06-04) — `tracing::error!` added to all failure paths.
 
-- `crates/vexboard-server/src/api/auth.rs:92`: `session.insert("username", ...).await.ok()` — session write failure is silently ignored. A user would be told they are logged in but the session may not persist.
+- ~~`crates/vexboard-server/src/api/auth.rs:92`: `session.insert("username", ...).await.ok()` — session write failure is silently ignored. A user would be told they are logged in but the session may not persist.~~ ✅ FIXED (2026-06-04) — `tracing::error!` added to session persist failures.
 
 - `crates/vexboard-server/src/api/setup.rs:38–42`: The `unwrap_or(1)` fallback on the user count check masks database errors, potentially allowing setup to fail silently.
 
@@ -148,9 +148,9 @@ The separation is intentional and well-enforced. The backend uses a standard Axu
 
 ### 1.7 Security
 
-**Missing authentication on API endpoints — CRITICAL:**
+**Missing authentication on API endpoints — CRITICAL: ✅ FIXED (2026-06-04)**
 
-There is **no session/authentication middleware applied to any non-auth endpoint**. Client-side Leptos code is the only enforcement mechanism. Any unauthenticated HTTP client can directly call:
+~~There is **no session/authentication middleware applied to any non-auth endpoint**. Client-side Leptos code is the only enforcement mechanism. Any unauthenticated HTTP client can directly call:~~
 
 - Read, create, update, delete services — `crates/vexboard-server/src/api/services.rs`
 - Read, create, update, delete groups — `crates/vexboard-server/src/api/groups.rs`
@@ -160,13 +160,11 @@ There is **no session/authentication middleware applied to any non-auth endpoint
 
 Only `/auth/login`, `/auth/logout`, `/auth/me`, `/setup`, and `/health` are in the auth module. All other endpoints have no server-side session check.
 
-**Session cookie `with_secure(false)` — HIGH:**
+**Session cookie `with_secure(false)` — HIGH: ✅ FIXED (2026-06-04)**
 
-`crates/vexboard-server/src/main.rs:103`:
-```rust
-let session_layer = SessionManagerLayer::new(session_store).with_secure(false);
-```
-`.with_secure(false)` disables the `Secure` cookie flag, allowing session cookies to transmit over plain HTTP. On any unencrypted local network connection, sessions are vulnerable to interception.
+~~`.with_secure(false)` disables the `Secure` cookie flag, allowing session cookies to transmit over plain HTTP. On any unencrypted local network connection, sessions are vulnerable to interception.~~
+
+`secure_cookies` is now a configurable field in `[auth]` section of `config/default.toml`, wired to `.with_secure(config.auth.secure_cookies)` in `main.rs`.
 
 **CORS allow-all — MEDIUM-HIGH:**
 
@@ -218,8 +216,8 @@ Permissive CORS is documented as "development-friendly" but there is no environm
 
 | Severity | Count | Examples |
 |---|---|---|
-| 🔴 Critical | 1 | No auth middleware on any non-auth API endpoint |
-| 🟠 High | 3 | Session cookie `with_secure(false)`; N+1 query in `list_services`; only 2 tests for ~4,500 lines of code |
+| 🔴 Critical | 1 | ~~No auth middleware on any non-auth API endpoint~~ ✅ FIXED |
+| 🟠 High | 3 | ~~Session cookie `with_secure(false)`~~ ✅ FIXED; ~~N+1 query in `list_services`~~ ✅ FIXED; only 2 tests for ~4,500 lines of code |
 | 🟡 Medium | 5 | Allow-all CORS; in-memory session store (documented TODO); silent probe DB write failure; silent session insert failure; setup endpoint race condition |
 | 🔵 Low | 7 | Hardcoded `localhost` in Docker discovery; unused `Setting` struct; dead `group_id` field; `discovered.rs` stub; tags serialization silent data loss; duplicate auth query; `COUNT` vs `EXISTS` |
 | ⚪ Info | 4 | No API docs (OpenAPI); no troubleshooting guide; feature-gated auth duplication verbose but functional; placeholder secrets in committed files |
@@ -234,35 +232,20 @@ VexBoard is a well-architected, actively developed project with solid fundamenta
 
 ### 2.1 Quick Wins (low effort, high value)
 
-**1. Add session authentication middleware to the Axum router**
-- **What:** Create an `auth_required` middleware (using `tower::layer_fn` or a custom layer) that checks for a valid session and returns `401 Unauthorized` if absent. Apply it to all routes except `/api/v1/setup`, `/api/v1/auth/login`, `/api/v1/auth/logout`, and `/health`.
-- **Why:** Single highest-impact fix — closes the critical security hole where the entire API is publicly accessible without authentication.
-- **Files:** `crates/vexboard-server/src/api/mod.rs`, `crates/vexboard-server/src/main.rs`
-- **Effort:** ~1–2 hours
+**1. ✅ DONE (2026-06-04) — Add session authentication middleware to the Axum router**
+- `require_auth` middleware implemented in `crates/vexboard-server/src/api/mod.rs`, applied to all protected routes via `.route_layer(middleware::from_fn(require_auth))`.
 
-**2. Fix N+1 query in `list_services`**
-- **What:** Replace the per-service probe result query loop with a single `LEFT JOIN` or `WITH latest_probes AS (...)` CTE that fetches all latest probe results in one query.
-- **Why:** Linear database query growth will noticeably degrade dashboard load time as service count grows.
-- **Files:** `crates/vexboard-server/src/api/services.rs:22–54`
-- **Effort:** 30–45 minutes
+**2. ✅ DONE (2026-06-04) — Fix N+1 query in `list_services`**
+- Replaced per-service probe result loop with a single `LEFT JOIN` query in `crates/vexboard-server/src/api/services.rs`.
 
-**3. Add error logging to silently-failing probe DB writes**
-- **What:** Replace `let _ = sqlx::query(...).execute(db).await` with `if let Err(e) = ... { tracing::error!(...) }` in `uptime.rs` and do the same for the session insert in `auth.rs`.
-- **Why:** Silent failures are invisible in production; operators cannot diagnose missed probe results without log entries.
-- **Files:** `crates/vexboard-server/src/probe/uptime.rs:67–73`, `crates/vexboard-server/src/api/auth.rs:92`
-- **Effort:** 15 minutes
+**3. ✅ DONE (2026-06-04) — Add error logging to silently-failing probe DB writes**
+- `tracing::error!` added to all `let _ =` failure paths in `uptime.rs` and `auth.rs`.
 
-**4. Make session `with_secure` configurable**
-- **What:** Add `[auth] secure_cookies = true` to `config/default.toml`, parse it in `config.rs`, and wire it to `.with_secure(cfg.auth.secure_cookies)` at startup. This lets HTTP-only self-hosted deployments opt out explicitly.
-- **Why:** As-is, session cookies transmit in cleartext over HTTP, enabling session hijacking on local networks.
-- **Files:** `crates/vexboard-server/src/main.rs:103`, `config/default.toml`, `crates/vexboard-server/src/config.rs`
-- **Effort:** 30 minutes
+**4. ✅ DONE (2026-06-04) — Make session `with_secure` configurable**
+- `secure_cookies` field added to `AuthConfig` in `config.rs`; `config/default.toml` sets `secure_cookies = false`; wired to `.with_secure(config.auth.secure_cookies)` in `main.rs`.
 
-**5. Remove or implement the `Setting` struct**
-- **What:** Either delete `crates/vexboard-server/src/db/models.rs:50–54` (the `Setting` struct and its `#[allow(dead_code)]`) or implement the persistent settings store it implies.
-- **Why:** Dead code signals an abandoned feature and adds confusion for future contributors.
-- **Files:** `crates/vexboard-server/src/db/models.rs`
-- **Effort:** 10 minutes (delete) or 2–4 hours (implement)
+**5. ✅ DONE (2026-06-05) — Remove the `Setting` struct**
+- Deleted dead `Setting` struct and its `#[allow(dead_code)]` annotation from `crates/vexboard-server/src/db/models.rs`. No usages existed anywhere in the codebase.
 
 ---
 
