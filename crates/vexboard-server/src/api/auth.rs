@@ -1,12 +1,13 @@
 use axum::{
-    extract::State,
-    http::StatusCode,
+    extract::{ConnectInfo, State},
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
 use serde::Deserialize;
 use serde_json::json;
+use std::net::{IpAddr, SocketAddr};
 use tower_sessions::Session;
 
 use crate::db::models::LoginRequest;
@@ -19,6 +20,19 @@ pub fn router() -> Router<AppState> {
         .route("/me", get(me).patch(update_me))
 }
 
+/// Extract the client IP from ConnectInfo, falling back to X-Forwarded-For.
+fn client_ip(connect_info: &ConnectInfo<SocketAddr>, headers: &HeaderMap) -> IpAddr {
+    if let Some(forwarded) = headers
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.split(',').next())
+        .and_then(|s| s.trim().parse::<IpAddr>().ok())
+    {
+        return forwarded;
+    }
+    connect_info.0.ip()
+}
+
 #[derive(Debug, Deserialize)]
 struct UpdateMeRequest {
     current_password: String,
@@ -29,10 +43,21 @@ struct UpdateMeRequest {
 #[cfg(all(unix, feature = "pam-auth"))]
 #[tracing::instrument(skip_all)]
 async fn login(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
+    connect_info: ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     session: Session,
     Json(payload): Json<LoginRequest>,
 ) -> impl IntoResponse {
+    if state.config.auth.login_rate_limit_attempts > 0 {
+        let ip = client_ip(&connect_info, &headers);
+        if !state.login_limiter.check(ip) {
+            return (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(json!({"error": "Too many login attempts — try again later"})),
+            );
+        }
+    }
     use crate::pam_auth::authenticate_pam;
     if authenticate_pam(&payload.username, &payload.password) {
         if let Err(e) = session.insert("username", payload.username.clone()).await {
@@ -54,9 +79,20 @@ async fn login(
 #[tracing::instrument(skip_all)]
 async fn login(
     State(state): State<AppState>,
+    connect_info: ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     session: Session,
     Json(payload): Json<LoginRequest>,
 ) -> impl IntoResponse {
+    if state.config.auth.login_rate_limit_attempts > 0 {
+        let ip = client_ip(&connect_info, &headers);
+        if !state.login_limiter.check(ip) {
+            return (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(json!({"error": "Too many login attempts — try again later"})),
+            );
+        }
+    }
     let user = sqlx::query_as::<_, crate::db::models::User>(
         "SELECT id, username, password_hash, created_at FROM users WHERE username = ?",
     )

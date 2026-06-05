@@ -41,6 +41,21 @@ pub struct AuthConfig {
     /// Leave false for plain-HTTP self-hosted deployments on a local network.
     #[serde(default)]
     pub secure_cookies: bool,
+    /// Maximum login attempts per IP address within the rate-limit window before
+    /// returning 429 Too Many Requests. Set to 0 to disable rate limiting.
+    #[serde(default = "default_login_rate_limit_attempts")]
+    pub login_rate_limit_attempts: u32,
+    /// Sliding window duration in seconds for the login rate limiter.
+    #[serde(default = "default_login_rate_limit_window_secs")]
+    pub login_rate_limit_window_secs: u64,
+}
+
+fn default_login_rate_limit_attempts() -> u32 {
+    10
+}
+
+fn default_login_rate_limit_window_secs() -> u64 {
+    60
 }
 
 #[derive(Debug, Clone, Deserialize)]

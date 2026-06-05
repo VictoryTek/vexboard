@@ -4,6 +4,7 @@ mod db;
 mod discovery;
 mod metrics;
 mod probe;
+mod rate_limit;
 mod session_store;
 
 #[cfg(all(unix, feature = "pam-auth"))]
@@ -31,6 +32,7 @@ pub struct AppState {
     pub discoveries: DiscoveryList,
     pub metrics_tx: broadcast::Sender<SystemSnapshot>,
     pub probe_tx: broadcast::Sender<probe::uptime::ProbeEvent>,
+    pub login_limiter: Arc<rate_limit::LoginRateLimiter>,
 }
 
 #[tokio::main]
@@ -62,6 +64,12 @@ async fn main() -> anyhow::Result<()> {
     // Create discovery list
     let discoveries = discovery::new_discovery_list();
 
+    // Build login rate limiter
+    let login_limiter = Arc::new(rate_limit::LoginRateLimiter::new(
+        config.auth.login_rate_limit_attempts,
+        config.auth.login_rate_limit_window_secs,
+    ));
+
     // Build application state
     let state = AppState {
         db: db.clone(),
@@ -69,6 +77,7 @@ async fn main() -> anyhow::Result<()> {
         discoveries: discoveries.clone(),
         metrics_tx: metrics_tx.clone(),
         probe_tx: probe_tx.clone(),
+        login_limiter,
     };
 
     // Spawn background tasks
@@ -148,7 +157,11 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(%addr, "Listening");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app.into_make_service()).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
 
     Ok(())
 }

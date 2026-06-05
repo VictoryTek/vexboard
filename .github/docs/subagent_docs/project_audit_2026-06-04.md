@@ -257,11 +257,8 @@ VexBoard is a well-architected, actively developed project with solid fundamenta
 **2. ✅ DONE (2026-06-05) — CORS origin allowlist via configuration**
 - Added `allowed_origins: Vec<String>` to `ServerConfig` with `#[serde(default)]` defaulting to `["*"]` (backward-compatible). `config/default.toml` documents the knob with a production example. `main.rs` maps `["*"]` → `CorsLayer::allow_origin(Any)` and any other list → parsed `HeaderValue` list with a `tracing::warn!` for malformed entries. No new dependencies.
 
-**3. API rate limiting on the login endpoint**
-- **Problem:** No per-IP request rate limiting. The login endpoint is vulnerable to brute-force attacks.
-- **Value:** Basic protection against credential stuffing.
-- **Complexity:** Medium — `tower-governor` crate provides ready-made rate limiting as an Axum layer.
-- **Builds on:** Existing Axum middleware stack in `main.rs`.
+**3. ✅ DONE (2026-06-05) — API rate limiting on the login endpoint**
+- `tower-governor` was not available in the local registry; implemented a zero-dependency sliding-window `LoginRateLimiter` in `crates/vexboard-server/src/rate_limit.rs` using `std::sync::Mutex<HashMap<IpAddr, VecDeque<Instant>>>`. IP extracted via `ConnectInfo<SocketAddr>` with `X-Forwarded-For` fallback. Rate limit (default 10 attempts / 60 s) is configurable in `config/default.toml`. Set `login_rate_limit_attempts = 0` to disable. Check runs before any DB or bcrypt work.
 
 **4. Audit log for sensitive operations**
 - **Problem:** No record of who created/deleted services, changed credentials, or triggered discovery. Compliance and incident investigation concern for shared deployments.

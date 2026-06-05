@@ -18,6 +18,10 @@ session_ttl_hours = 168  # 7 days
 # Set to true if the server is behind TLS; enables the Secure cookie flag.
 # Keep false for plain-HTTP local-network deployments.
 secure_cookies = false
+# Login rate limiting: max attempts per IP within the window before 429 is returned.
+# Set login_rate_limit_attempts to 0 to disable.
+login_rate_limit_attempts = 10
+login_rate_limit_window_secs = 60
 
 [discovery]
 enabled = true
