@@ -53,7 +53,7 @@ pub fn ServiceCard(
         match src {
             "docker" => Some(("Docker".to_string(), "#0db7ed".to_string())),
             "podman" => Some(("Podman".to_string(), "#892ca0".to_string())),
-            "systemd" => Some(("Systemd".to_string(), "var(--color-accent)".to_string())),
+            "systemd" => Some(("Systemd".to_string(), "#e8873a".to_string())),
             _ => None,
         }
     } else if service
@@ -62,7 +62,7 @@ pub fn ServiceCard(
         .map(|u| u.ends_with(".service"))
         .unwrap_or(false)
     {
-        Some(("Systemd".to_string(), "var(--color-accent)".to_string()))
+        Some(("Systemd".to_string(), "#e8873a".to_string()))
     } else {
         None
     };

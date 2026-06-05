@@ -32,7 +32,7 @@ impl DiscoveredUnitFe {
         match self.source.as_str() {
             "docker" => "#0db7ed",
             "podman" => "#892ca0",
-            _ => "var(--color-accent)",
+            _ => "#e8873a",
         }
     }
 }
@@ -153,10 +153,11 @@ pub fn DiscoveryPanel(#[prop(into)] on_added: Callback<()>) -> impl IntoView {
                                     <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:0.75rem;">
                                         <div style="min-width:0; flex:1;">
                                             <span style=format!(
-                                                "display:inline-block; font-size:0.6rem; font-weight:700; \
-                                                 letter-spacing:0.06em; text-transform:uppercase; \
+                                                "display:inline-flex; align-items:center; font-size:0.68rem; font-weight:700; \
+                                                 letter-spacing:0.04em; text-transform:uppercase; \
                                                  color:{color}; background:{color}22; \
-                                                 border-radius:0.25rem; padding:0.1rem 0.4rem; margin-bottom:0.3rem;"
+                                                 border:1px solid {color}40; \
+                                                 border-radius:20px; padding:3px 9px; margin-bottom:0.3rem;"
                                             )>{label}</span>
                                             <p style="font-size:0.875rem; font-weight:600; color:var(--color-text-primary); margin:0 0 0.15rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                                                 {name}

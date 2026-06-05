@@ -1,4 +1,4 @@
-use leptos::either::Either;
+use leptos::either::{Either, EitherOf3};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
@@ -10,7 +10,6 @@ use crate::components::service_card::{ServiceCard, ServiceData};
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum SortMode {
     Default,
-    Alphabetical,
     Source,
 }
 
@@ -173,7 +172,6 @@ pub fn DashboardPage() -> impl IntoView {
                                 border-radius:0.5rem; padding:0.2rem;">
                         {[
                             (SortMode::Default, "Default"),
-                            (SortMode::Alphabetical, "A–Z"),
                             (SortMode::Source, "Source"),
                         ].map(|(mode, label)| view! {
                             <button
@@ -287,24 +285,44 @@ pub fn DashboardPage() -> impl IntoView {
                 </div>
             }>
                 {move || services.get().map(|svcs| {
-                    let mut svcs = svcs;
-                    match sort_mode.get() {
-                        SortMode::Alphabetical => svcs.sort_by(|a, b| {
-                            a.display_name.to_ascii_lowercase().cmp(&b.display_name.to_ascii_lowercase())
-                        }),
-                        SortMode::Source => svcs.sort_by(|a, b| {
-                            let src = |s: &ServiceResponse| {
-                                s.discovery_source.clone()
-                                    .or_else(|| s.systemd_unit.as_ref().filter(|u| u.ends_with(".service")).map(|_| "systemd".to_string()))
-                                    .unwrap_or_default()
-                                    .to_ascii_lowercase()
-                            };
-                            src(a).cmp(&src(b)).then(a.display_name.to_ascii_lowercase().cmp(&b.display_name.to_ascii_lowercase()))
-                        }),
-                        SortMode::Default => {}
-                    }
+                    let render_card = move |svc: ServiceResponse| {
+                        let id = svc.id;
+                        let edit_form = EditFormData {
+                            display_name: svc.display_name.clone(),
+                            description: svc.description.clone().unwrap_or_default(),
+                            url: svc.url.clone().unwrap_or_default(),
+                            icon: svc.icon.clone().unwrap_or_default(),
+                            group_id: None,
+                            probe_enabled: svc.probe_enabled,
+                            probe_interval: svc.probe_interval,
+                        };
+                        let data = ServiceData {
+                            id: svc.id,
+                            systemd_unit: svc.systemd_unit,
+                            discovery_source: svc.discovery_source,
+                            display_name: svc.display_name,
+                            description: svc.description,
+                            url: svc.url,
+                            icon: svc.icon,
+                            status: svc.status,
+                            latency_ms: svc.latency_ms,
+                        };
+                        let on_delete = Callback::new(move |_: i64| {
+                            spawn_local(async move {
+                                let _ = gloo_net::http::Request::delete(
+                                    &format!("/api/v1/services/{id}")
+                                ).send().await;
+                                services.refetch();
+                            });
+                        });
+                        let on_edit = Callback::new(move |_: i64| {
+                            edit_target.set(Some((id, edit_form.clone())));
+                        });
+                        view! { <ServiceCard service=data on_delete=on_delete on_edit=on_edit /> }
+                    };
+
                     if svcs.is_empty() {
-                        Either::Left(view! {
+                        EitherOf3::A(view! {
                             <div class="empty-state">
                                 <div class="empty-icon">
                                     <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
@@ -325,44 +343,50 @@ pub fn DashboardPage() -> impl IntoView {
                                 </div>
                             </div>
                         })
+                    } else if sort_mode.get() == SortMode::Source {
+                        let get_src = |s: &ServiceResponse| -> String {
+                            s.discovery_source.clone()
+                                .or_else(|| s.systemd_unit.as_ref().filter(|u| u.ends_with(".service")).map(|_| "systemd".to_string()))
+                                .unwrap_or_default()
+                                .to_ascii_lowercase()
+                        };
+                        let source_order: &[(&str, &str, &str)] = &[
+                            ("docker",  "Docker",  "#0db7ed"),
+                            ("podman",  "Podman",  "#892ca0"),
+                            ("systemd", "Systemd", "#e8873a"),
+                            ("",        "Manual",  "#6b7280"),
+                        ];
+                        let sections = source_order.iter().filter_map(|(src_key, label, color)| {
+                            let group: Vec<ServiceResponse> = svcs.iter()
+                                .filter(|s| get_src(s) == *src_key)
+                                .cloned()
+                                .collect();
+                            if group.is_empty() { return None; }
+                            let color = color.to_string();
+                            let label = label.to_string();
+                            let cards = group.into_iter().map(|svc| render_card(svc)).collect_view();
+                            Some(view! {
+                                <div style="margin-bottom:1.75rem;">
+                                    <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.75rem;">
+                                        <span style=format!(
+                                            "display:inline-flex; align-items:center; font-size:0.68rem; font-weight:700; \
+                                             letter-spacing:0.04em; text-transform:uppercase; \
+                                             color:{color}; background:{color}22; border:1px solid {color}40; \
+                                             border-radius:20px; padding:3px 9px;"
+                                        )>{label}</span>
+                                        <div style="flex:1; height:1px; background:var(--color-border); opacity:0.4;"></div>
+                                    </div>
+                                    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,360px)); gap:1rem; justify-content:start;">
+                                        {cards}
+                                    </div>
+                                </div>
+                            })
+                        }).collect_view();
+                        EitherOf3::B(view! { <div>{sections}</div> })
                     } else {
-                        Either::Right(view! {
+                        EitherOf3::C(view! {
                             <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,360px)); gap:1rem; justify-content:start;">
-                                {svcs.into_iter().map(|svc| {
-                                    let id = svc.id;
-                                    let edit_form = EditFormData {
-                                        display_name: svc.display_name.clone(),
-                                        description: svc.description.clone().unwrap_or_default(),
-                                        url: svc.url.clone().unwrap_or_default(),
-                                        icon: svc.icon.clone().unwrap_or_default(),
-                                        group_id: None,
-                                        probe_enabled: svc.probe_enabled,
-                                        probe_interval: svc.probe_interval,
-                                    };
-                                    let data = ServiceData {
-                                        id: svc.id,
-                                        systemd_unit: svc.systemd_unit,
-                                        discovery_source: svc.discovery_source,
-                                        display_name: svc.display_name,
-                                        description: svc.description,
-                                        url: svc.url,
-                                        icon: svc.icon,
-                                        status: svc.status,
-                                        latency_ms: svc.latency_ms,
-                                    };
-                                    let on_delete = Callback::new(move |_: i64| {
-                                        spawn_local(async move {
-                                            let _ = gloo_net::http::Request::delete(
-                                                &format!("/api/v1/services/{id}")
-                                            ).send().await;
-                                            services.refetch();
-                                        });
-                                    });
-                                    let on_edit = Callback::new(move |_: i64| {
-                                        edit_target.set(Some((id, edit_form.clone())));
-                                    });
-                                    view! { <ServiceCard service=data on_delete=on_delete on_edit=on_edit /> }
-                                }).collect_view()}
+                                {svcs.into_iter().map(render_card).collect_view()}
                             </div>
                         })
                     }
