@@ -254,11 +254,8 @@ VexBoard is a well-architected, actively developed project with solid fundamenta
 **1. ✅ DONE (2026-06-05) — Persistent SQLite-backed session store**
 - `tower-sessions-sqlx-store 0.15.0` had a hard version mismatch with our `tower-sessions 0.15` (core trait version collision). Implemented a custom `SqliteSessionStore` in `crates/vexboard-server/src/session_store.rs` using `#[async_trait]`, `serde_json`, and `time` — all already in the dependency graph. Sessions now persist across restarts in the existing SQLite database (`tower_sessions` table, created by `migrate()` at startup).
 
-**2. CORS origin allowlist via configuration**
-- **Problem:** Allow-all CORS is a security liability for production deployments behind a reverse proxy with a known origin.
-- **Value:** Closes a medium-high security gap without breaking legitimate use cases.
-- **Complexity:** Low — add `[server] allowed_origins = ["*"]` to `config/default.toml`, parse in `config.rs`, wire to `CorsLayer`.
-- **Builds on:** `crates/vexboard-server/src/config.rs`, `crates/vexboard-server/src/main.rs:119–124`.
+**2. ✅ DONE (2026-06-05) — CORS origin allowlist via configuration**
+- Added `allowed_origins: Vec<String>` to `ServerConfig` with `#[serde(default)]` defaulting to `["*"]` (backward-compatible). `config/default.toml` documents the knob with a production example. `main.rs` maps `["*"]` → `CorsLayer::allow_origin(Any)` and any other list → parsed `HeaderValue` list with a `tracing::warn!` for malformed entries. No new dependencies.
 
 **3. API rate limiting on the login endpoint**
 - **Problem:** No per-IP request rate limiting. The login endpoint is vulnerable to brute-force attacks.

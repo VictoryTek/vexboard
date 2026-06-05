@@ -12,6 +12,7 @@ mod pam_auth;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use axum::http::HeaderValue;
 use sqlx::SqlitePool;
 use tokio::sync::broadcast;
 use tower_http::cors::{Any, CorsLayer};
@@ -117,13 +118,30 @@ async fn main() -> anyhow::Result<()> {
         ServeDir::new(&assets_root).fallback(ServeFile::new(format!("{}/index.html", assets_root))),
     );
 
-    // Add CORS for development
-    let app = app.layer(
+    let cors_layer = if config.server.allowed_origins.iter().any(|o| o == "*") {
         CorsLayer::new()
             .allow_origin(Any)
             .allow_methods(Any)
-            .allow_headers(Any),
-    );
+            .allow_headers(Any)
+    } else {
+        let origins: Vec<HeaderValue> = config
+            .server
+            .allowed_origins
+            .iter()
+            .filter_map(|o| match o.parse() {
+                Ok(v) => Some(v),
+                Err(_) => {
+                    tracing::warn!(origin = %o, "Ignoring malformed CORS allowed_origin");
+                    None
+                }
+            })
+            .collect();
+        CorsLayer::new()
+            .allow_origin(origins)
+            .allow_methods(Any)
+            .allow_headers(Any)
+    };
+    let app = app.layer(cors_layer);
 
     // Start server
     let addr: SocketAddr = format!("{}:{}", config.server.host, config.server.port).parse()?;

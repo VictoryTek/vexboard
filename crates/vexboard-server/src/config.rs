@@ -18,6 +18,14 @@ pub struct ServerConfig {
     pub host: String,
     pub port: u16,
     pub assets_path: String,
+    /// Origins permitted by CORS. Use `["*"]` to allow any origin (default).
+    /// In production set this to your frontend URL, e.g. `["https://dashboard.example.com"]`.
+    #[serde(default = "default_allowed_origins")]
+    pub allowed_origins: Vec<String>,
+}
+
+fn default_allowed_origins() -> Vec<String> {
+    vec!["*".to_string()]
 }
 
 #[derive(Debug, Clone, Deserialize)]

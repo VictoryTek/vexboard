@@ -3,6 +3,10 @@ host = "0.0.0.0"
 port = 7280
 # Path to static frontend assets (set to "embedded" to use bundled assets)
 assets_path = "embedded"
+# CORS allowed origins. Use ["*"] to allow any origin (default, suitable for
+# local-network deployments). In production, restrict to your frontend URL:
+#   allowed_origins = ["https://dashboard.example.com"]
+allowed_origins = ["*"]
 
 [database]
 path = "/var/lib/vexboard/vexboard.db"
