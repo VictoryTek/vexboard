@@ -30,15 +30,6 @@ pub struct Service {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
-pub struct ProbeResult {
-    pub id: i64,
-    pub service_id: i64,
-    pub status: String,
-    pub latency_ms: Option<i64>,
-    pub checked_at: Option<NaiveDateTime>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct User {
     pub id: i64,
     pub username: String,

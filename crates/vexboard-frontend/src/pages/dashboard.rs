@@ -364,7 +364,7 @@ pub fn DashboardPage() -> impl IntoView {
                             if group.is_empty() { return None; }
                             let color = color.to_string();
                             let label = label.to_string();
-                            let cards = group.into_iter().map(|svc| render_card(svc)).collect_view();
+                            let cards = group.into_iter().map(render_card).collect_view();
                             Some(view! {
                                 <div style="margin-bottom:1.75rem;">
                                     <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.75rem;">

@@ -64,16 +64,19 @@ pub async fn probe_service(
     };
 
     // Record result in database
-    let _ =
+    if let Err(e) =
         sqlx::query("INSERT INTO probe_results (service_id, status, latency_ms) VALUES (?, ?, ?)")
             .bind(svc.id)
             .bind(&status)
             .bind(latency_ms)
             .execute(db)
-            .await;
+            .await
+    {
+        tracing::error!("failed to record probe result for service {}: {e}", svc.id);
+    }
 
     // Trim old results to keep max_history entries
-    let _ = sqlx::query(
+    if let Err(e) = sqlx::query(
         "DELETE FROM probe_results WHERE service_id = ? AND id NOT IN \
          (SELECT id FROM probe_results WHERE service_id = ? ORDER BY checked_at DESC LIMIT ?)",
     )
@@ -81,7 +84,10 @@ pub async fn probe_service(
     .bind(svc.id)
     .bind(max_history as i64)
     .execute(db)
-    .await;
+    .await
+    {
+        tracing::warn!("failed to trim probe history for service {}: {e}", svc.id);
+    }
 
     // Broadcast event
     let event = ProbeEvent {
@@ -89,5 +95,7 @@ pub async fn probe_service(
         status,
         latency_ms,
     };
-    let _ = tx.send(event);
+    if let Err(e) = tx.send(event) {
+        tracing::debug!("no active probe subscribers: {e}");
+    }
 }

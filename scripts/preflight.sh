@@ -27,9 +27,9 @@ else
   fail "cargo clippy"
 fi
 
-# 3. Tests
+# 3. Tests (frontend is wasm32-only; exclude it from native test runs)
 step "Tests"
-if cargo test --workspace; then
+if cargo test -p vexboard-server; then
   pass "cargo test"
 else
   fail "cargo test"

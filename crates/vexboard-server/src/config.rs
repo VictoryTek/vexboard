@@ -29,6 +29,10 @@ pub struct DatabaseConfig {
 pub struct AuthConfig {
     pub secret: String,
     pub session_ttl_hours: u64,
+    /// Set to true when the server is behind TLS (enables the Secure cookie flag).
+    /// Leave false for plain-HTTP self-hosted deployments on a local network.
+    #[serde(default)]
+    pub secure_cookies: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]

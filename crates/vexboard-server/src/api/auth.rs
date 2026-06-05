@@ -35,10 +35,9 @@ async fn login(
 ) -> impl IntoResponse {
     use crate::pam_auth::authenticate_pam;
     if authenticate_pam(&payload.username, &payload.password) {
-        session
-            .insert("username", payload.username.clone())
-            .await
-            .ok();
+        if let Err(e) = session.insert("username", payload.username.clone()).await {
+            tracing::error!("failed to persist session after login: {e}");
+        }
         (
             StatusCode::OK,
             Json(json!({ "user": { "username": payload.username } })),
@@ -89,7 +88,9 @@ async fn login(
         );
     }
 
-    session.insert("username", user.username.clone()).await.ok();
+    if let Err(e) = session.insert("username", user.username.clone()).await {
+        tracing::error!("failed to persist session after login: {e}");
+    }
 
     (
         StatusCode::OK,

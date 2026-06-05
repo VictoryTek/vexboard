@@ -11,6 +11,9 @@ path = "/var/lib/vexboard/vexboard.db"
 # Session secret — override with VEXBOARD_AUTH_SECRET env var in production
 secret = "change-me-in-production"
 session_ttl_hours = 168  # 7 days
+# Set to true if the server is behind TLS; enables the Secure cookie flag.
+# Keep false for plain-HTTP local-network deployments.
+secure_cookies = false
 
 [discovery]
 enabled = true

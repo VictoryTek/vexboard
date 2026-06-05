@@ -99,8 +99,8 @@ async fn main() -> anyhow::Result<()> {
 
     // Build router
     let session_store = MemoryStore::default();
-    // TODO: use a persistent SQLite-backed store for production deployments
-    let session_layer = SessionManagerLayer::new(session_store).with_secure(false);
+    let session_layer =
+        SessionManagerLayer::new(session_store).with_secure(config.auth.secure_cookies);
 
     let app = api::router().with_state(state).layer(session_layer);
 

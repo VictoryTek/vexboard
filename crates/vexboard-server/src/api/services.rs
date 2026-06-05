@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -10,6 +12,13 @@ use serde_json::json;
 use crate::db::models::{CreateService, Service, ServiceWithStatus, UpdateService};
 use crate::AppState;
 
+#[derive(sqlx::FromRow)]
+struct LatestProbe {
+    service_id: i64,
+    status: String,
+    latency_ms: Option<i64>,
+}
+
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(list_services).post(create_service))
@@ -19,49 +28,55 @@ pub fn router() -> Router<AppState> {
 
 #[tracing::instrument(skip(state))]
 async fn list_services(State(state): State<AppState>) -> impl IntoResponse {
-    let services = sqlx::query_as::<_, Service>(
+    let svcs = match sqlx::query_as::<_, Service>(
         "SELECT id, systemd_unit, discovery_source, display_name, description, url, icon, group_id, \
          sort_order, probe_enabled, probe_interval, tags, visible, created_at, updated_at \
          FROM services WHERE visible = 1 ORDER BY sort_order ASC",
     )
     .fetch_all(&state.db)
-    .await;
-
-    match services {
-        Ok(svcs) => {
-            let mut result = Vec::with_capacity(svcs.len());
-            for svc in svcs {
-                // Get latest probe result
-                let probe = sqlx::query_as::<_, crate::db::models::ProbeResult>(
-                    "SELECT id, service_id, status, latency_ms, checked_at \
-                     FROM probe_results WHERE service_id = ? ORDER BY checked_at DESC LIMIT 1",
-                )
-                .bind(svc.id)
-                .fetch_optional(&state.db)
-                .await
-                .unwrap_or(None);
-
-                let (status, latency_ms) = match probe {
-                    Some(p) => (p.status, p.latency_ms),
-                    None => ("unknown".to_string(), None),
-                };
-
-                result.push(ServiceWithStatus {
-                    service: svc,
-                    status,
-                    latency_ms,
-                });
-            }
-            (StatusCode::OK, Json(json!(result)))
-        }
+    .await
+    {
+        Ok(s) => s,
         Err(e) => {
             tracing::error!("Failed to list services: {e}");
-            (
+            return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({"error": "Failed to fetch services"})),
-            )
+            );
         }
-    }
+    };
+
+    // Fetch the latest probe result for every service in a single query,
+    // then join in memory — avoids an N+1 round-trip per service.
+    let probe_map: HashMap<i64, (String, Option<i64>)> = sqlx::query_as::<_, LatestProbe>(
+        "SELECT service_id, status, latency_ms \
+         FROM probe_results \
+         WHERE (service_id, checked_at) IN \
+               (SELECT service_id, MAX(checked_at) FROM probe_results GROUP BY service_id)",
+    )
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default()
+    .into_iter()
+    .map(|p| (p.service_id, (p.status, p.latency_ms)))
+    .collect();
+
+    let result: Vec<ServiceWithStatus> = svcs
+        .into_iter()
+        .map(|svc| {
+            let (status, latency_ms) = probe_map
+                .get(&svc.id)
+                .cloned()
+                .unwrap_or_else(|| ("unknown".to_string(), None));
+            ServiceWithStatus {
+                service: svc,
+                status,
+                latency_ms,
+            }
+        })
+        .collect();
+
+    (StatusCode::OK, Json(json!(result)))
 }
 
 #[tracing::instrument(skip(state))]
