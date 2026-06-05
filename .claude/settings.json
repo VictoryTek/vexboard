@@ -1,0 +1,32 @@
+{
+  "effortLevel": "medium",
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git branch:*)",
+      "Bash(git show:*)",
+      "Bash(git stash list:*)",
+      "Bash(cargo fmt --all -- --check:*)",
+      "Bash(cargo clippy --workspace -- -D warnings:*)",
+      "Bash(cargo test --workspace:*)",
+      "Bash(cargo test -p vexboard-server:*)",
+      "Bash(cargo build --release --bin vexboard-server:*)",
+      "Bash(cargo audit --ignore RUSTSEC-2023-0071:*)",
+      "Bash(cargo check --bin vexboard-server:*)",
+      "Bash(pwsh -File scripts/preflight.ps1:*)",
+      "Bash(bash scripts/preflight.sh:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo build --workspace:*)",
+      "Bash(cargo build --release:*)",
+      "Bash(cargo test --all-targets:*)",
+      "Bash(docker build:*)",
+      "Bash(trunk build:*)",
+      "Bash(trunk serve:*)"
+    ]
+  }
+}

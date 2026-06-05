@@ -17,6 +17,13 @@ You do NOT perform quick fixes, skip phases, or declare completion before Phase 
 - Build or Preflight failure ALWAYS results in NEEDS_REFINEMENT
 - Work is NOT complete until Phase 6 passes
 - NEVER run any command listed under FORBIDDEN COMMANDS without explicit user approval
+- NEVER assert the state of the repository, Git history, lock files, or remote branches
+  without verifying first — always run the appropriate check command before making any
+  claim about what has or has not been pushed, committed, or applied
+- NEVER tell the user they need to push, commit, or update when you have not first confirmed
+  the current state with a git or build tool command
+- Guessing repository or system state wastes the user's tokens and trust —
+  when in doubt, CHECK FIRST, then speak
 - After 2 failed refinement cycles, STOP and report full findings to the user — do NOT loop silently
 
 ---
@@ -78,10 +85,11 @@ Package Manager(s): **Cargo (workspace resolver v2)**
 
 ### Resource Constraints
 
-- RAM: ~32 GB total / ~22 GB available — parallel workspace builds are safe; avoid `--jobs` counts exceeding 16 on this machine
-- Disk: ~450 GB free on `/home` partition — routine builds are safe; Docker multi-stage builds add ~2–4 GB per run
-- CI environment: Local / Docker-based (no GitHub Actions workflow detected); all preflight checks are designed to run locally via `scripts/preflight.sh`
-- Other constraints: The `vexboard-frontend` crate targets `wasm32-unknown-unknown` exclusively — any command that builds it for the native target will fail; always scope backend builds with `--bin vexboard-server`
+- CI environment: Local / Docker-based (no GitHub Actions workflow active); preflight checks are designed to run locally via `scripts/preflight.sh` (Linux/macOS) or `scripts/preflight.ps1` (Windows); developer works on both Windows and Linux
+- Workspace layout: the `vexboard-frontend` crate targets `wasm32-unknown-unknown` exclusively — any command that builds the full workspace for the native target will fail; always scope backend builds with `--bin vexboard-server`
+- Docker multi-stage builds add ~2–4 GB of disk per run; avoid ad-hoc `docker build` calls during routine validation
+- Backend optional feature `pam-auth` only compiles on Linux with `libpam-dev` present — do not enable it on Windows or in cross-platform CI steps
+- SQLx uses compile-time query checking; `DATABASE_URL` or `SQLX_OFFLINE=true` must be set when building from scratch
 
 ### Repository Notes
 
@@ -102,24 +110,128 @@ Package Manager(s): **Cargo (workspace resolver v2)**
 
 ## Standard Workflow
 
-Every user request MUST follow this workflow in full:
+Every user request MUST follow this workflow:
 
 ```
-USER REQUEST
-    ↓
-PHASE 1: Research & Specification
-    ↓
-PHASE 2: Implementation
-    ↓
-PHASE 3: Review & Quality Assurance
-    ↓
-Issues found? ──YES──→ PHASE 4: Refinement (max 2 cycles)
-    │                        ↓
-    NO               PHASE 5: Re-Review
-    │                        ↓
-    └──────────────→ PHASE 6: Preflight Validation (final gate)
-                             ↓
-                     PHASE 7: Commit Message & Delivery
+┌─────────────────────────────────────────────────────────────┐
+│ USER REQUEST                                                │
+└──────────────────────────┬──────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│ PHASE 1: RESEARCH & SPECIFICATION                                   │
+│ • Reads and analyzes relevant codebase files                        │
+│ • Researches minimum 6 credible sources                             │
+│ • Designs architecture and implementation approach                  │
+│ • Documents findings in:                                            │
+│   .github/docs/subagent_docs/[FEATURE_NAME]_spec.md                 │
+│ • Returns: summary + spec file path                                 │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────────┐
+│ PHASE 2: IMPLEMENTATION                                     │
+│ • Reads spec from:                                          │
+│   .github/docs/subagent_docs/[FEATURE_NAME]_spec.md         │
+│ • Implements all changes strictly per specification         │
+│ • Ensures build compatibility                               │
+│ • Returns: summary + list of modified file paths            │
+└──────────────────────────┬──────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────────┐
+│ PHASE 3: REVIEW & QUALITY ASSURANCE                         │
+│ • Reviews implemented code at specified paths               │
+│ • Validates: best practices, consistency, maintainability   │
+│ • Runs build + tests (safe commands only)                   │
+│ • Documents review in:                                      │
+│   .github/docs/subagent_docs/[FEATURE_NAME]_review.md       │
+│ • Returns: findings + PASS / NEEDS_REFINEMENT               │
+└──────────────────────────┬──────────────────────────────────┘
+                           ↓
+                  ┌────────┴────────────┐
+                  │ Issues Found?       │
+                  │ (Build failure =    │
+                  │  automatic YES)     │
+                  └────────┬────────────┘
+                           │
+                ┌──────────┴──────────┐
+                │                     │
+               YES                   NO
+                │                     │
+                ↓                     ↓
+┌──────────────────────────────┐      │
+│ PHASE 4: REFINEMENT          │      │
+│ • Max 2 cycles               │      │
+│ • Fixes ALL CRITICAL issues  │      │
+│ • Implements RECOMMENDED     │      │
+│   improvements               │      │
+│ • Returns: summary +         │      │
+│   updated file paths         │      │
+└──────────────┬───────────────┘      │
+               ↓                      │
+┌──────────────────────────────┐      │
+│ PHASE 5: RE-REVIEW           │      │
+│ • Verifies all issues        │      │
+│   resolved                   │      │
+│ • Confirms build success     │      │
+│ • Documents final review in: │      │
+│   [FEATURE_NAME]_review_     │      │
+│   final.md                   │      │
+│ • Returns: APPROVED /        │      │
+│   NEEDS_FURTHER_REFINEMENT   │      │
+└──────────────┬───────────────┘      │
+               ↓                      │
+      ┌────────┴──────────┐           │
+      │ Approved?         │           │
+      └────────┬──────────┘           │
+               │                      │
+     ┌─────────┴──────────┐           │
+     │                    │           │
+    NO                   YES          │
+     │                    │           │
+     ↓                    └─────┬─────┘
+(Return to                      ↓
+ Phase 4)      ┌─────────────────────────────────────────────────────┐
+               │ PHASE 6: PREFLIGHT VALIDATION (FINAL GATE)          │
+               │                                                     │
+               │ Step 1: Detect preflight script                     │
+               │   • scripts/preflight.sh                            │
+               │   • scripts/preflight.ps1                           │
+               │   • make preflight                                  │
+               │   • npm run preflight                               │
+               │   • cargo preflight                                 │
+               │                                                     │
+               │ Step 2: Execute preflight                           │
+               │   • Run preflight script if exists                  │
+               │   • If not found: create it (see Phase 6 details)   │
+               │   • Exit code MUST be 0                             │
+               │   • Treat failures as CRITICAL                      │
+               │     → triggers Phase 4 refinement (max 2 cycles)   │
+               └──────────────────────┬──────────────────────────────┘
+                                      ↓
+                             ┌────────┴────────────┐
+                             │ Preflight Pass?     │
+                             │ (Exit code == 0)    │
+                             └────────┬────────────┘
+                                      │
+                           ┌──────────┴──────────┐
+                           │                     │
+                          NO                    YES
+                           │                     │
+                           ↓                     ↓
+               ┌───────────────────┐  ┌──────────────────────────────┐
+               │ Refinement        │  │ PHASE 7: COMMIT MESSAGE      │
+               │ (max 2 cycles)    │  │ & DELIVERY                   │
+               │ → Phase 4 →       │  │                              │
+               │   Phase 5 →       │  │ • Aggregate ALL modified     │
+               │   Phase 6         │  │   file paths                 │
+               └───────────────────┘  │ • Generate commit message    │
+                                      │ • Output ready to paste      │
+                                      │   into git commit            │
+                                      └──────────────┬───────────────┘
+                                                     ↓
+                                      ┌──────────────────────────────┐
+                                      │ "All checks passed. Code is  │
+                                      │  ready to push to GitHub."   │
+                                      └──────────────────────────────┘
 ```
 
 ---
@@ -432,6 +544,59 @@ Modified Files:
 Valid commit types: `feat`, `fix`, `chore`, `refactor`, `docs`, `test`, `perf`
 
 Example first line: `fix(discovery): exclude one-shot systemd units from service list`
+
+---
+
+## 🔍 VERIFY BEFORE ASSERTING (NO GUESSING)
+
+Before making ANY claim about the current state of the repository, build system,
+or lock files — run the appropriate verification command first.
+Asserting without checking wastes the user's tokens and trust.
+
+### Git & Repository State
+
+Before saying anything about what has or has not been committed or pushed:
+
+```bash
+# Current branch and tracking status
+git status
+
+# Last 5 commits on current branch
+git log --oneline -5
+
+# Compare local branch to remote
+git log --oneline origin/$(git branch --show-current)..HEAD
+# (empty output = fully pushed; lines = commits not yet pushed)
+
+# Check if a specific file was recently changed
+git log --oneline -3 -- <filename>
+```
+
+Never say "you need to push first" or "that hasn't been pushed yet" without
+running `git log origin/<branch>..HEAD` and confirming it returns output.
+If it returns nothing, the branch IS pushed.
+
+### Lock File & Dependency State
+
+Before saying anything about whether a lock file is up to date:
+
+```bash
+# Show the last git commit that touched the lock file
+git log --oneline -3 -- <lockfile>
+
+# Show when the lock file was last modified on disk
+stat <lockfile>
+```
+
+Never say "the lock file is stale" or "you need to update dependencies first"
+without checking the actual file state.
+
+### The Golden Rule
+
+**If you are not certain — run a check command and report what it returns.**
+**Do not fill uncertainty with an assumption stated as fact.**
+A one-line `git log` or `stat` call costs nothing. A false assertion costs
+the user tokens, trust, and time spent correcting you.
 
 ---
 
