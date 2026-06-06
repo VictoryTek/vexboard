@@ -1,4 +1,4 @@
-{ lib, stdenv, rustPlatform, rustToolchain, pkg-config, openssl, dbus, linux-pam
+{ lib, rustPlatform, rustToolchain, pkg-config, openssl, dbus, linux-pam
 , trunk, wasmBindgenCli, binaryen }:
 
 let
@@ -14,6 +14,7 @@ rustPlatform.buildRustPackage {
   };
 
   nativeBuildInputs = [
+    rustToolchain  # must come first to expose wasm32-unknown-unknown target to trunk
     pkg-config
     trunk
     wasmBindgenCli

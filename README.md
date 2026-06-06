@@ -22,33 +22,93 @@ Visit `http://localhost:7280`.
 
 ### NixOS
 
-```nix
-{
-  inputs.vexboard.url = "github:victorytek/vexboard";
+Add VexBoard as a flake input, apply the overlay so `pkgs.vexboard` is
+available, then enable the module:
 
-  # In your configuration.nix:
-  services.vexboard = {
-    enable = true;
-    port = 7280;
-    openFirewall = true;
+```nix
+# flake.nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    vexboard.url  = "github:VictoryTek/vexboard";
+  };
+
+  outputs = { nixpkgs, vexboard, ... }: {
+    nixosConfigurations.myserver = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        vexboard.nixosModules.default
+        ({ pkgs, ... }: {
+          nixpkgs.overlays = [ vexboard.overlays.default ];
+
+          services.vexboard = {
+            enable      = true;
+            port        = 7280;
+            openFirewall = true;
+
+            # Path to a file containing:  VEXBOARD_AUTH__SECRET=<random>
+            # Generate one with:  openssl rand -base64 48
+            secretFile = "/run/secrets/vexboard-auth-secret";
+          };
+        })
+      ];
+    };
   };
 }
+```
+
+That's all that's required. The module creates the `vexboard` system user,
+registers a systemd service, and writes `/etc/vexboard/config.toml` from
+the module options.
+
+**Extra settings** beyond host/port can be passed as structured Nix attrs:
+
+```nix
+services.vexboard.settings = {
+  auth.secure_cookies    = true;   # enable when behind TLS
+  discovery.interval_secs = 30;
+  notifications.webhooks = [
+    { url = "https://hooks.example.com/vexboard";
+      events = [ "service.down" "service.up" ]; }
+  ];
+};
+```
+
+**Override the package** (e.g. to use a local checkout):
+
+```nix
+services.vexboard.package =
+  vexboard.packages.${pkgs.system}.vexboard;
 ```
 
 ### Development
 
 ```bash
-# Enter dev shell (requires Nix with flakes)
+# Enter dev shell — provides Rust (with WASM target), Trunk, sqlx-cli,
+# wasm-bindgen-cli, wasm-opt, and Tailwind CSS (requires Nix with flakes)
 nix develop
 
-# Run the backend
-cd crates/vexboard-server
-cargo run
+# Start the backend (creates dev.db on first run)
+cd crates/vexboard-server && cargo run
 
-# Run the frontend (separate terminal)
-cd crates/vexboard-frontend
-trunk serve
+# Start the frontend with hot-reload (separate terminal)
+cd crates/vexboard-frontend && trunk serve
 ```
+
+Visit `http://localhost:8080` (Trunk proxy) or `http://localhost:7280`
+(backend directly).
+
+### Build the Nix package
+
+```bash
+nix build
+```
+
+On first run this will fail twice with hash mismatches for
+`wasm-bindgen-cli`. Copy the `got: sha256-...` value from each error
+into `flake.nix` (the two `fakeHash` placeholders), then re-run. This
+is a one-time step required to pin the CLI to the exact version in
+`Cargo.lock`.
 
 ## Architecture
 

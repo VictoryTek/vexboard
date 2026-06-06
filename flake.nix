@@ -20,6 +20,14 @@
           targets = [ "wasm32-unknown-unknown" ];
         };
 
+        # Build a custom rustPlatform from the toolchain above so that
+        # rustPlatform.buildRustPackage (used by package.nix) compiles with the
+        # wasm32-unknown-unknown target available.
+        customRustPlatform = pkgs.makeRustPlatform {
+          rustc = rustToolchain;
+          cargo = rustToolchain;
+        };
+
         # Pin wasm-bindgen-cli to match the version in Cargo.lock (0.2.121).
         # Trunk enforces a hard version match between the CLI binary and the
         # wasm-bindgen crate; a mismatch aborts the build.
@@ -50,6 +58,7 @@
       {
         packages.vexboard = pkgs.callPackage ./nix/package.nix {
           inherit rustToolchain wasmBindgenCli;
+          rustPlatform = customRustPlatform;
         };
         packages.default = self.packages.${system}.vexboard;
 
@@ -74,5 +83,14 @@
     ) // {
       nixosModules.vexboard = ./nix/module.nix;
       nixosModules.default = self.nixosModules.vexboard;
+
+      # Apply this overlay to make pkgs.vexboard available, which the NixOS
+      # module requires. Add it to nixpkgs.overlays in your NixOS configuration:
+      #
+      #   nixpkgs.overlays = [ inputs.vexboard.overlays.default ];
+      #
+      overlays.default = final: prev: {
+        vexboard = self.packages.${prev.system}.vexboard;
+      };
     };
 }

@@ -1,10 +1,40 @@
 { config, lib, pkgs, ... }:
 let
   cfg = config.services.vexboard;
+
+  # Generate /etc/vexboard/config.toml from the module options and any extra
+  # settings the user provides. env vars still take highest priority per the
+  # server's load order, so nothing set here can be accidentally overridden.
+  settingsFormat = pkgs.formats.toml { };
+
+  baseConfig = {
+    server = {
+      host = cfg.host;
+      port = cfg.port;
+      # Point the server at the installed assets inside the Nix store.
+      assets_path = "${cfg.package}/share/vexboard/assets";
+    };
+    database.path = "${cfg.dataDir}/vexboard.db";
+  };
+
+  configFile = settingsFormat.generate "vexboard.toml"
+    (lib.recursiveUpdate baseConfig cfg.settings);
 in
 {
   options.services.vexboard = {
     enable = lib.mkEnableOption "VexBoard dashboard";
+
+    package = lib.mkOption {
+      type = lib.types.package;
+      default = pkgs.vexboard;
+      defaultText = lib.literalExpression "pkgs.vexboard";
+      description = ''
+        The vexboard package to use. Requires that the vexboard overlay is
+        applied to nixpkgs (add `inputs.vexboard.overlays.default` to
+        `nixpkgs.overlays`) or set this to the package from the flake directly:
+          package = inputs.vexboard.packages.''${pkgs.system}.vexboard;
+      '';
+    };
 
     port = lib.mkOption {
       type = lib.types.port;
@@ -21,7 +51,7 @@ in
     dataDir = lib.mkOption {
       type = lib.types.path;
       default = "/var/lib/vexboard";
-      description = "Directory for VexBoard data (database, etc).";
+      description = "Directory for VexBoard data (SQLite database, etc.).";
     };
 
     openFirewall = lib.mkOption {
@@ -30,10 +60,40 @@ in
       description = "Whether to open the firewall for VexBoard's port.";
     };
 
+    secretFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = ''
+        Path to a file containing environment variable overrides loaded at
+        service startup. Use this to supply the auth secret without putting
+        it in the Nix store:
+
+          VEXBOARD_AUTH__SECRET=your-random-secret-here
+
+        Generate a suitable secret with:  openssl rand -base64 48
+        If null, the compiled-in default placeholder is used — do NOT leave
+        this unset in a production or internet-facing deployment.
+      '';
+    };
+
     settings = lib.mkOption {
-      type = lib.types.attrs;
-      default = {};
-      description = "Extra settings merged into config.toml.";
+      type = settingsFormat.type;
+      default = { };
+      description = ''
+        Additional settings merged into /etc/vexboard/config.toml using
+        lib.recursiveUpdate. Values here override the defaults derived from
+        the other module options (host, port, dataDir). Use TOML-compatible
+        Nix attribute syntax. Example:
+
+          settings = {
+            auth.secure_cookies = true;
+            discovery.interval_secs = 30;
+            notifications.webhooks = [
+              { url = "https://hooks.example.com/vexboard";
+                events = [ "service.down" "service.up" ]; }
+            ];
+          };
+      '';
     };
   };
 
@@ -45,16 +105,18 @@ in
       createHome = false;
       description = "VexBoard service user";
     };
-    users.groups.vexboard = {};
+    users.groups.vexboard = { };
 
-    security.pam.services.vexboard = {};
+    security.pam.services.vexboard = { };
+
+    environment.etc."vexboard/config.toml".source = configFile;
 
     systemd.services.vexboard = {
       description = "VexBoard Dashboard";
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" "dbus.service" ];
       serviceConfig = {
-        ExecStart = "${pkgs.vexboard}/bin/vexboard-server";
+        ExecStart = "${cfg.package}/bin/vexboard-server";
         StateDirectory = "vexboard";
         DynamicUser = false;
         User = "vexboard";
@@ -63,11 +125,7 @@ in
         PrivateTmp = true;
         ProtectSystem = "strict";
         ReadWritePaths = [ cfg.dataDir ];
-        Environment = [
-          "VEXBOARD_SERVER__HOST=${cfg.host}"
-          "VEXBOARD_SERVER__PORT=${toString cfg.port}"
-          "VEXBOARD_DATABASE__PATH=${cfg.dataDir}/vexboard.db"
-        ];
+        EnvironmentFiles = lib.optional (cfg.secretFile != null) cfg.secretFile;
       };
     };
 
