@@ -115,9 +115,19 @@ pub(crate) async fn create_service(
     session: Session,
     Json(payload): Json<CreateService>,
 ) -> impl IntoResponse {
-    let tags_json = payload
-        .tags
-        .map(|t| serde_json::to_string(&t).unwrap_or_default());
+    let tags_json = match payload.tags {
+        Some(t) => match serde_json::to_string(&t) {
+            Ok(j) => Some(j),
+            Err(e) => {
+                tracing::error!("create_service: failed to serialize tags: {e}");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": "Internal error"})),
+                );
+            }
+        },
+        None => None,
+    };
 
     let result = sqlx::query(
            "INSERT INTO services (systemd_unit, discovery_source, display_name, description, url, icon, group_id, \
@@ -244,10 +254,19 @@ pub(crate) async fn update_service(
     let probe_enabled = payload.probe_enabled.unwrap_or(existing.probe_enabled);
     let probe_interval = payload.probe_interval.unwrap_or(existing.probe_interval);
     let visible = payload.visible.unwrap_or(existing.visible);
-    let tags_json = payload
-        .tags
-        .map(|t| serde_json::to_string(&t).unwrap_or_default())
-        .or(existing.tags);
+    let tags_json = match payload.tags {
+        Some(t) => match serde_json::to_string(&t) {
+            Ok(j) => Some(j),
+            Err(e) => {
+                tracing::error!("update_service: failed to serialize tags: {e}");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": "Internal error"})),
+                );
+            }
+        },
+        None => existing.tags,
+    };
 
     let result = sqlx::query(
         "UPDATE services SET discovery_source = ?, display_name = ?, description = ?, url = ?, icon = ?, \

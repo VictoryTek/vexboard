@@ -37,10 +37,19 @@ pub async fn status() -> impl axum::response::IntoResponse {
     )
 )]
 pub async fn status(State(state): State<AppState>) -> impl axum::response::IntoResponse {
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
+    let count: i64 = match sqlx::query_scalar("SELECT COUNT(*) FROM users")
         .fetch_one(&state.db)
         .await
-        .unwrap_or(1);
+    {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!("setup/status: failed to query user count: {e}");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Internal error"})),
+            );
+        }
+    };
     (
         StatusCode::OK,
         Json(json!({ "needs_setup": count == 0, "auth_mode": "local" })),
@@ -64,10 +73,19 @@ pub async fn create_admin(
     State(state): State<AppState>,
     Json(payload): Json<SetupRequest>,
 ) -> impl axum::response::IntoResponse {
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
+    let count: i64 = match sqlx::query_scalar("SELECT COUNT(*) FROM users")
         .fetch_one(&state.db)
         .await
-        .unwrap_or(1);
+    {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!("setup/create_admin: failed to query user count: {e}");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Internal error"})),
+            );
+        }
+    };
     if count != 0 {
         return (
             StatusCode::CONFLICT,
@@ -114,10 +132,23 @@ pub async fn create_admin(
             .await;
             (StatusCode::OK, Json(json!({"status": "ok"})))
         }
-        Err(_) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "Failed to create user"})),
-        ),
+        Err(e) => {
+            // A concurrent setup request won the race — the UNIQUE constraint
+            // on username fired after we observed count == 0.
+            if let sqlx::Error::Database(db_err) = &e {
+                if db_err.message().contains("UNIQUE constraint failed") {
+                    return (
+                        StatusCode::CONFLICT,
+                        Json(json!({"error": "Setup already completed"})),
+                    );
+                }
+            }
+            tracing::error!("setup/create_admin: failed to insert admin user: {e}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to create user"})),
+            )
+        }
     }
 }
 
