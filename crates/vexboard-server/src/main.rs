@@ -9,6 +9,9 @@ mod probe;
 mod rate_limit;
 mod session_store;
 
+#[cfg(test)]
+mod tests;
+
 #[cfg(all(unix, feature = "pam-auth"))]
 mod pam_auth;
 

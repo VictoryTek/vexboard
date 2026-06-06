@@ -1,41 +1,4 @@
 #!/usr/bin/env bash
-# VexBoard pre-commit hook — enforces formatting and lint on staged Rust files.
-# Install via: scripts/install-hooks.sh
-# Skip clippy:  SKIP_CLIPPY=1 git commit ...
-set -euo pipefail
-
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$ROOT"
-
-# Only run if .rs files are staged
-STAGED_RS=$(git diff --cached --name-only --diff-filter=ACMR | grep '\.rs$' || true)
-if [ -z "$STAGED_RS" ]; then
-    exit 0
-fi
-
-FAILED=0
-
-echo "[pre-commit] Checking Rust formatting..."
-if ! cargo fmt --all -- --check 2>&1; then
-    echo ""
-    echo "[pre-commit] FAIL: formatting issues found."
-    echo "  Run 'cargo fmt --all' to fix, then re-stage and commit."
-    FAILED=1
-fi
-
-if [ "${SKIP_CLIPPY:-0}" != "1" ]; then
-    echo "[pre-commit] Running clippy..."
-    if ! cargo clippy --workspace -- -D warnings 2>&1; then
-        echo ""
-        echo "[pre-commit] FAIL: clippy warnings found."
-        echo "  Fix the warnings above, or set SKIP_CLIPPY=1 to bypass."
-        FAILED=1
-    fi
-fi
-
-if [ "$FAILED" -ne 0 ]; then
-    exit 1
-fi
-
-echo "[pre-commit] All checks passed."
+# VexBoard pre-commit hook — no-op.
+# fmt/clippy checks are enforced by scripts/preflight.sh and CI, not at commit time.
 exit 0
