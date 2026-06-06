@@ -154,8 +154,7 @@ pub fn DashboardPage() -> impl IntoView {
                             on:click=move |_| {
                                 spawn_local(async move {
                                     if let Ok(mut all) = fetch_services().await {
-                                        all.sort_by(|a, b| a.display_name.to_lowercase()
-                                            .cmp(&b.display_name.to_lowercase()));
+                                        all.sort_by_key(|a| a.display_name.to_lowercase());
                                         let payload: Vec<_> = all.iter()
                                             .enumerate()
                                             .map(|(i, s)| (s.id, i as i64))

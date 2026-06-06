@@ -154,7 +154,7 @@ pub(super) fn ServiceGrid(
                         let member_ids: Vec<i64> = members.iter().map(|s| s.id).collect();
                         let reset_payload: Vec<(i64, i64)> = {
                             let mut sorted = members.clone();
-                            sorted.sort_by(|a, b| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase()));
+                            sorted.sort_by_key(|a| a.display_name.to_lowercase());
                             sorted.iter().enumerate().map(|(i, s)| (s.id, i as i64)).collect()
                         };
                         let members_with_idx: Vec<(usize, ServiceResponse)> =
@@ -296,7 +296,7 @@ pub(super) fn ServiceGrid(
                         let member_ids: Vec<i64> = group.iter().map(|s| s.id).collect();
                         let reset_payload: Vec<(i64, i64)> = {
                             let mut sorted = group.clone();
-                            sorted.sort_by(|a, b| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase()));
+                            sorted.sort_by_key(|a| a.display_name.to_lowercase());
                             sorted.iter().enumerate().map(|(i, s)| (s.id, i as i64)).collect()
                         };
                         let members_with_idx: Vec<(usize, ServiceResponse)> =
