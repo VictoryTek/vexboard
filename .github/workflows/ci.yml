@@ -40,6 +40,31 @@ jobs:
       - name: Build backend (release)
         run: cargo build --release --bin vexboard-server
 
+      - name: Generate OpenAPI spec
+        env:
+          VEXBOARD_DATABASE__PATH: /tmp/vexboard-ci.db
+          VEXBOARD_AUTH__SECRET: ci-only-not-a-real-secret
+          VEXBOARD_DISCOVERY__ENABLED: "false"
+          VEXBOARD_DOCKER__ENABLED: "false"
+          VEXBOARD_SERVER__PORT: "17280"
+        run: |
+          ./target/release/vexboard-server &
+          SERVER_PID=$!
+          # Wait for the server to be ready
+          for i in $(seq 1 10); do
+            curl -sf http://localhost:17280/health && break
+            sleep 1
+          done
+          curl -sf http://localhost:17280/api-docs/openapi.json -o openapi.json
+          kill $SERVER_PID
+
+      - name: Upload OpenAPI spec
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-spec-${{ github.sha }}
+          path: openapi.json
+          retention-days: 90
+
   frontend:
     name: Frontend (WASM build)
     runs-on: ubuntu-latest

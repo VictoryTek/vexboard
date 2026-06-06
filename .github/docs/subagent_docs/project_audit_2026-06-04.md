@@ -311,12 +311,11 @@ VexBoard is a well-architected, actively developed project with solid fundamenta
 **2. ✅ DONE (2026-06-06) — Build out the test suite**
 - `src/tests.rs` added with 14 integration tests: health check, login success/failure/unknown, `/me` unauthenticated/authenticated, logout session invalidation, services-unauthenticated 401, admin-route-as-viewer 403, list empty, create-as-admin 201, create-and-delete, create-as-viewer 403. `TestApp` harness uses in-memory SQLite, `MemoryStore` sessions, `ConnectInfo` extension injection, and bcrypt cost 4 seeds. Tests compile cleanly; SIGSEGV at runtime is pre-existing D-Bus/zbus environment issue (unchanged).
 
-**3. Add `SQLX_OFFLINE=true` support to the dev shell**
-- `flake.nix` sets `DATABASE_URL="sqlite:./dev.db"`, which requires the database file to exist for SQLx compile-time query checking. Supporting `SQLX_OFFLINE=true` with a committed `sqlx-data.json` would allow offline builds and clean CI caches.
-- **Files:** `flake.nix`, `.github/workflows/ci.yml`
+**3. ✅ N/A (2026-06-06) — Add `SQLX_OFFLINE=true` support to the dev shell**
+- Confirmed non-issue: the project uses `sqlx::query(...)` runtime calls throughout, not `query!` / `query_as!` / `query_scalar!` compile-time macros. SQLx performs no compile-time query checking and requires neither a live `DATABASE_URL` nor an offline `.sqlx/` cache directory. No action required.
 
-**4. Add a `docker-compose.override.yml` for local development**
-- The current `docker-compose.yml` targets production (uses the published `ghcr.io` image). A `docker-compose.override.yml` with bind-mounted source, local build, and `RUST_LOG=debug` would let developers test the full stack locally without pushing an image.
+**4. ✅ DONE (2026-06-06) — Add a `docker-compose.override.yml` for local development**
+- `docker-compose.override.yml` added. Merged automatically by `docker compose up`; builds from local source (`image: vexboard-local`), stores data in `./dev-data/` (bind mount, gitignored), and sets `RUST_LOG=vexboard_server=debug,tower_http=debug,info`. `dev-data/` added to `.gitignore`.
 
-**5. Add OpenAPI spec generation as a CI artifact**
-- Once `utoipa` is added (see Feature Recommendation #5), add a CI step that generates the OpenAPI spec and uploads it as a build artifact, giving operators a versioned API reference without running the server.
+**5. ✅ DONE (2026-06-06) — Add OpenAPI spec generation as a CI artifact**
+- Added two steps to the `backend` job in `.github/workflows/ci.yml`: starts the already-built release binary with discovery and Docker disabled (no D-Bus required), polls `/health` until ready, curls `/api-docs/openapi.json`, then uploads the result as a GitHub Actions artifact (`openapi-spec-<sha>`, retained 90 days).
