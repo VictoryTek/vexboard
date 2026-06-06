@@ -7,10 +7,6 @@ use crate::components::modal_edit::{EditFormData, EditModal, GroupItem};
 struct DiscoveredUnitFe {
     unit_name: String,
     description: String,
-    #[allow(dead_code)]
-    active_state: String,
-    #[allow(dead_code)]
-    sub_state: String,
     source: String,
     url_hint: Option<String>,
 }
