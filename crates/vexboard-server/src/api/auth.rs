@@ -41,7 +41,10 @@ pub(crate) struct UpdateMeRequest {
     new_password: Option<String>,
 }
 
-#[cfg(all(unix, feature = "pam-auth"))]
+// ---------------------------------------------------------------------------
+// login
+// ---------------------------------------------------------------------------
+
 #[utoipa::path(
     post,
     path = "/api/v1/auth/login",
@@ -49,79 +52,6 @@ pub(crate) struct UpdateMeRequest {
     request_body = LoginRequest,
     responses(
         (status = 200, description = "Login successful"),
-        (status = 401, description = "Invalid credentials"),
-        (status = 429, description = "Too many login attempts"),
-    )
-)]
-#[tracing::instrument(skip_all)]
-pub(crate) async fn login(
-    State(state): State<AppState>,
-    connect_info: ConnectInfo<SocketAddr>,
-    headers: HeaderMap,
-    session: Session,
-    Json(payload): Json<LoginRequest>,
-) -> impl IntoResponse {
-    if state.config.auth.login_rate_limit_attempts > 0 {
-        let ip = client_ip(&connect_info, &headers);
-        if !state.login_limiter.check(ip) {
-            return (
-                StatusCode::TOO_MANY_REQUESTS,
-                Json(json!({"error": "Too many login attempts — try again later"})),
-            );
-        }
-    }
-    let ip = client_ip(&connect_info, &headers);
-    let ip_str = ip.to_string();
-    use crate::pam_auth::authenticate_pam;
-    if authenticate_pam(&payload.username, &payload.password) {
-        if let Err(e) = session.insert("username", payload.username.clone()).await {
-            tracing::error!("failed to persist session after login: {e}");
-        }
-        // PAM users are always treated as admins (no DB role available).
-        if let Err(e) = session.insert("role", "admin".to_string()).await {
-            tracing::error!("failed to persist role in session after login: {e}");
-        }
-        db::audit::insert(
-            &state.db,
-            &payload.username,
-            "auth.login_success",
-            None,
-            None,
-            None,
-            Some(&ip_str),
-        )
-        .await;
-        (
-            StatusCode::OK,
-            Json(json!({ "user": { "username": payload.username, "role": "admin" } })),
-        )
-    } else {
-        let detail = serde_json::json!({"username": payload.username}).to_string();
-        db::audit::insert(
-            &state.db,
-            &payload.username,
-            "auth.login_failure",
-            None,
-            None,
-            Some(&detail),
-            Some(&ip_str),
-        )
-        .await;
-        (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "Invalid credentials"})),
-        )
-    }
-}
-
-#[cfg(not(all(unix, feature = "pam-auth")))]
-#[utoipa::path(
-    post,
-    path = "/api/v1/auth/login",
-    tag = "auth",
-    request_body = LoginRequest,
-    responses(
-        (status = 200, description = "Login successful", body = inline(crate::db::models::UserInfo)),
         (status = 401, description = "Invalid credentials"),
         (status = 429, description = "Too many login attempts"),
         (status = 500, description = "Database error"),
@@ -143,6 +73,69 @@ pub(crate) async fn login(
             Json(json!({"error": "Too many login attempts — try again later"})),
         );
     }
+
+    #[cfg(all(unix, feature = "pam-auth"))]
+    return login_pam(&state, &session, &payload, &ip_str).await;
+
+    #[cfg(not(all(unix, feature = "pam-auth")))]
+    login_local(&state, &session, &payload, &ip_str).await
+}
+
+#[cfg(all(unix, feature = "pam-auth"))]
+async fn login_pam(
+    state: &AppState,
+    session: &Session,
+    payload: &LoginRequest,
+    ip: &str,
+) -> (StatusCode, Json<serde_json::Value>) {
+    use crate::pam_auth::authenticate_pam;
+    if authenticate_pam(&payload.username, &payload.password) {
+        if let Err(e) = session.insert("username", payload.username.clone()).await {
+            tracing::error!("failed to persist session after login: {e}");
+        }
+        if let Err(e) = session.insert("role", "admin".to_string()).await {
+            tracing::error!("failed to persist role in session after login: {e}");
+        }
+        db::audit::insert(
+            &state.db,
+            &payload.username,
+            "auth.login_success",
+            None,
+            None,
+            None,
+            Some(ip),
+        )
+        .await;
+        (
+            StatusCode::OK,
+            Json(json!({ "user": { "username": payload.username, "role": "admin" } })),
+        )
+    } else {
+        let detail = serde_json::json!({"username": payload.username}).to_string();
+        db::audit::insert(
+            &state.db,
+            &payload.username,
+            "auth.login_failure",
+            None,
+            None,
+            Some(&detail),
+            Some(ip),
+        )
+        .await;
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({"error": "Invalid credentials"})),
+        )
+    }
+}
+
+#[cfg(not(all(unix, feature = "pam-auth")))]
+async fn login_local(
+    state: &AppState,
+    session: &Session,
+    payload: &LoginRequest,
+    ip: &str,
+) -> (StatusCode, Json<serde_json::Value>) {
     let user = sqlx::query_as::<_, crate::db::models::User>(
         "SELECT id, username, password_hash, role, created_at FROM users WHERE username = ?",
     )
@@ -161,7 +154,7 @@ pub(crate) async fn login(
                 None,
                 None,
                 Some(&detail),
-                Some(&ip_str),
+                Some(ip),
             )
             .await;
             return (
@@ -173,7 +166,7 @@ pub(crate) async fn login(
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({"error": "Database error"})),
-            )
+            );
         }
     };
 
@@ -187,7 +180,7 @@ pub(crate) async fn login(
             None,
             None,
             Some(&detail),
-            Some(&ip_str),
+            Some(ip),
         )
         .await;
         return (
@@ -209,17 +202,24 @@ pub(crate) async fn login(
         None,
         None,
         None,
-        Some(&ip_str),
+        Some(ip),
     )
     .await;
-
     (
         StatusCode::OK,
         Json(json!({
-            "user": crate::db::models::UserInfo { id: user.id, username: user.username.clone(), role: user.role }
+            "user": crate::db::models::UserInfo {
+                id: user.id,
+                username: user.username.clone(),
+                role: user.role,
+            }
         })),
     )
 }
+
+// ---------------------------------------------------------------------------
+// logout
+// ---------------------------------------------------------------------------
 
 #[utoipa::path(
     post,
@@ -243,32 +243,10 @@ pub(crate) async fn logout(State(state): State<AppState>, session: Session) -> i
     (StatusCode::OK, Json(json!({"status": "logged out"})))
 }
 
-#[cfg(all(unix, feature = "pam-auth"))]
-#[utoipa::path(
-    get,
-    path = "/api/v1/auth/me",
-    tag = "auth",
-    security(("cookieAuth" = [])),
-    responses(
-        (status = 200, description = "Current authenticated user"),
-        (status = 401, description = "Not authenticated"),
-    )
-)]
-#[tracing::instrument(skip_all)]
-pub(crate) async fn me(session: Session) -> impl IntoResponse {
-    match session.get::<String>("username").await {
-        Ok(Some(username)) => (
-            StatusCode::OK,
-            Json(json!({ "user": { "username": username, "role": "admin", "auth_mode": "pam" } })),
-        ),
-        _ => (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "Not authenticated"})),
-        ),
-    }
-}
+// ---------------------------------------------------------------------------
+// me
+// ---------------------------------------------------------------------------
 
-#[cfg(not(all(unix, feature = "pam-auth")))]
 #[utoipa::path(
     get,
     path = "/api/v1/auth/me",
@@ -283,16 +261,24 @@ pub(crate) async fn me(session: Session) -> impl IntoResponse {
 pub(crate) async fn me(session: Session) -> impl IntoResponse {
     match session.get::<String>("username").await {
         Ok(Some(username)) => {
-            let role = session
-                .get::<String>("role")
-                .await
-                .ok()
-                .flatten()
-                .unwrap_or_else(|| "admin".to_string());
+            #[cfg(all(unix, feature = "pam-auth"))]
+            let (role, auth_mode) = ("admin".to_string(), "pam");
+
+            #[cfg(not(all(unix, feature = "pam-auth")))]
+            let (role, auth_mode) = (
+                session
+                    .get::<String>("role")
+                    .await
+                    .ok()
+                    .flatten()
+                    .unwrap_or_else(|| "admin".to_string()),
+                "local",
+            );
+
             (
                 StatusCode::OK,
                 Json(
-                    json!({ "user": { "username": username, "role": role, "auth_mode": "local" } }),
+                    json!({ "user": { "username": username, "role": role, "auth_mode": auth_mode } }),
                 ),
             )
         }
@@ -302,6 +288,16 @@ pub(crate) async fn me(session: Session) -> impl IntoResponse {
         ),
     }
 }
+
+// ---------------------------------------------------------------------------
+// update_me
+//
+// The PAM version takes no arguments (it is a stub that returns 405). The
+// local version requires State + Session + Json<UpdateMeRequest>. Unifying
+// these signatures would force Axum to extract and parse a JSON body in PAM
+// mode even though no body is sent, causing 422 errors before the handler
+// runs. Feature-gating at the signature level is intentional here.
+// ---------------------------------------------------------------------------
 
 #[cfg(all(unix, feature = "pam-auth"))]
 #[utoipa::path(

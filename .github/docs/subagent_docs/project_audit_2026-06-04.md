@@ -288,10 +288,8 @@ VexBoard is a well-architected, actively developed project with solid fundamenta
 **1. ✅ DONE (2026-06-06) — Extract authentication middleware into its own module**
 - `crates/vexboard-server/src/middleware/auth.rs` created with `pub async fn require_auth` and `pub async fn require_admin`. `api/mod.rs` reduced to a clean router aggregator — all auth logic centralized in the new module.
 
-**2. Consolidate feature-gated auth handler duplication**
-- **What:** Replace the four pairs of `#[cfg(feature = "pam-auth")]` / `#[cfg(not(feature = "pam-auth"))]` function definitions in `crates/vexboard-server/src/api/auth.rs` with a single handler calling into an internal abstraction.
-- **Why:** ~150 lines of near-duplicate code; any change to auth behavior (2FA, rate limiting, audit logging) must be applied in both branches.
-- **Risk:** Low-Medium — logic is verified by existing CI.
+**2. ✅ DONE (2026-06-06) — Consolidate feature-gated auth handler duplication**
+- `login` unified into one public handler + two private cfg-gated helpers (`login_pam` / `login_local`); rate limit check and IP extraction live once. `me` collapsed into one function with an inline cfg assignment. `update_me` intentionally kept feature-gated — PAM version is a zero-arg 405 stub; unifying signatures would cause 422 errors in PAM mode (comment documents this).
 
 **3. Split `dashboard.rs` into sub-components**
 - **What:** Extract from `crates/vexboard-frontend/src/pages/dashboard.rs` (459 lines):
