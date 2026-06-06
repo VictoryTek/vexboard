@@ -18,12 +18,17 @@ fn extract_favicon_url(url: &str) -> Option<String> {
 }
 
 #[derive(Debug, Clone)]
+pub struct GroupItem {
+    pub id: i64,
+    pub name: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct EditFormData {
     pub display_name: String,
     pub description: String,
     pub url: String,
     pub icon: String,
-    #[allow(dead_code)]
     pub group_id: Option<i64>,
     pub probe_enabled: bool,
     pub probe_interval: i64,
@@ -36,6 +41,7 @@ pub fn EditModal(
     #[prop(into)] on_save: Callback<EditFormData>,
     #[prop(default = "Add Service")] title: &'static str,
     #[prop(optional)] initial: Option<EditFormData>,
+    #[prop(default = vec![])] groups: Vec<GroupItem>,
 ) -> impl IntoView {
     let initial = initial.unwrap_or(EditFormData {
         display_name: String::new(),
@@ -51,6 +57,7 @@ pub fn EditModal(
     let (desc, set_desc) = signal(initial.description);
     let (url, set_url) = signal(initial.url);
     let (icon, set_icon) = signal(initial.icon);
+    let (selected_group_id, set_selected_group_id) = signal(initial.group_id);
     // true = icon was auto-derived from the URL, false = user manually set it
     let (icon_auto, set_icon_auto) = signal(true);
 
@@ -136,6 +143,43 @@ pub fn EditModal(
                                 />
                             </div>
                         </div>
+                        // Group selector — only rendered when groups are available
+                        {if !groups.is_empty() {
+                            let groups = groups.clone();
+                            Either::Left(view! {
+                                <div>
+                                    <label class="form-label">"Group"</label>
+                                    <select
+                                        class="form-input"
+                                        on:change=move |ev| {
+                                            let val = event_target_value(&ev);
+                                            if val.is_empty() {
+                                                set_selected_group_id.set(None);
+                                            } else if let Ok(id) = val.parse::<i64>() {
+                                                set_selected_group_id.set(Some(id));
+                                            }
+                                        }
+                                    >
+                                        <option value="" selected=move || selected_group_id.get().is_none()>
+                                            "— No group —"
+                                        </option>
+                                        {groups.into_iter().map(|g| {
+                                            let gid = g.id;
+                                            view! {
+                                                <option
+                                                    value={g.id.to_string()}
+                                                    selected=move || selected_group_id.get() == Some(gid)
+                                                >
+                                                    {g.name}
+                                                </option>
+                                            }
+                                        }).collect_view()}
+                                    </select>
+                                </div>
+                            })
+                        } else {
+                            Either::Right(())
+                        }}
                     </div>
                     <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.5rem;">
                         <button class="btn-secondary" on:click=move |_| on_close.run(())>
@@ -147,7 +191,7 @@ pub fn EditModal(
                                 description: desc.get(),
                                 url: url.get(),
                                 icon: icon.get(),
-                                group_id: None,
+                                group_id: selected_group_id.get(),
                                 probe_enabled: true,
                                 probe_interval: 30,
                             });

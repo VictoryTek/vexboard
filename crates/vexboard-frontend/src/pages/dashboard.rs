@@ -1,8 +1,8 @@
-use leptos::either::{Either, EitherOf3};
+use leptos::either::{Either, EitherOf4};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
-use crate::components::modal_edit::{EditFormData, EditModal};
+use crate::components::modal_edit::{EditFormData, EditModal, GroupItem};
 use crate::components::quick_link_card::{QuickLinkCard, QuickLinkData};
 use crate::components::quick_link_modal::{QuickLinkFormData, QuickLinkModal};
 use crate::components::service_card::{ServiceCard, ServiceData};
@@ -11,6 +11,7 @@ use crate::components::service_card::{ServiceCard, ServiceData};
 enum SortMode {
     Default,
     Source,
+    Group,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -22,10 +23,17 @@ struct ServiceResponse {
     description: Option<String>,
     url: Option<String>,
     icon: Option<String>,
+    group_id: Option<i64>,
     status: String,
     latency_ms: Option<i64>,
     probe_enabled: bool,
     probe_interval: i64,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+struct GroupResponse {
+    id: i64,
+    name: String,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -37,11 +45,26 @@ struct QuickLinkResponse {
     description: Option<String>,
 }
 
+fn resolve_groups(groups: &LocalResource<Vec<GroupResponse>>) -> Vec<GroupItem> {
+    groups
+        .get()
+        .map(|g| {
+            g.iter()
+                .map(|r| GroupItem {
+                    id: r.id,
+                    name: r.name.clone(),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 #[component]
 pub fn DashboardPage() -> impl IntoView {
     let services = LocalResource::new(|| async move { fetch_services().await.unwrap_or_default() });
     let quick_links =
         LocalResource::new(|| async move { fetch_quick_links().await.unwrap_or_default() });
+    let groups = LocalResource::new(|| async move { fetch_groups().await.unwrap_or_default() });
 
     let (show_modal, set_show_modal) = signal(false);
     let (show_add_menu, set_show_add_menu) = signal(false);
@@ -59,6 +82,7 @@ pub fn DashboardPage() -> impl IntoView {
                 "description": if data.description.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(data.description) },
                 "url": if data.url.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(data.url) },
                 "icon": if data.icon.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(data.icon) },
+                "group_id": data.group_id,
                 "probe_enabled": data.probe_enabled,
                 "probe_interval": data.probe_interval,
             });
@@ -87,12 +111,15 @@ pub fn DashboardPage() -> impl IntoView {
     });
 
     view! {
-        // Add service modal
-        <EditModal
-            visible=show_modal
-            on_close=Callback::new(move |_| set_show_modal.set(false))
-            on_save=on_save
-        />
+        // Add service modal — reactive wrapper ensures groups prop updates when resource loads
+        {move || view! {
+            <EditModal
+                visible=show_modal
+                on_close=Callback::new(move |_| set_show_modal.set(false))
+                on_save=on_save
+                groups=resolve_groups(&groups)
+            />
+        }}
 
         // Add quick link modal
         <QuickLinkModal
@@ -103,6 +130,7 @@ pub fn DashboardPage() -> impl IntoView {
 
         // Edit service modal
         {move || edit_target.get().map(|(id, initial)| {
+            let group_items = resolve_groups(&groups);
             let (show_edit, set_show_edit) = signal(true);
             let on_edit_save = Callback::new(move |data: EditFormData| {
                 spawn_local(async move {
@@ -111,6 +139,7 @@ pub fn DashboardPage() -> impl IntoView {
                         "description": data.description,
                         "url": data.url,
                         "icon": data.icon,
+                        "group_id": data.group_id,
                         "probe_enabled": data.probe_enabled,
                         "probe_interval": data.probe_interval,
                     });
@@ -126,6 +155,7 @@ pub fn DashboardPage() -> impl IntoView {
                     visible=show_edit
                     title="Edit Service"
                     initial=initial
+                    groups=group_items
                     on_close=Callback::new(move |_| { set_show_edit.set(false); edit_target.set(None); })
                     on_save=on_edit_save
                 />
@@ -172,7 +202,8 @@ pub fn DashboardPage() -> impl IntoView {
                                 border-radius:0.5rem; padding:0.2rem;">
                         {[
                             (SortMode::Default, "Default"),
-                            (SortMode::Source, "Source"),
+                            (SortMode::Source,  "Source"),
+                            (SortMode::Group,   "Group"),
                         ].map(|(mode, label)| view! {
                             <button
                                 style=move || {
@@ -292,7 +323,7 @@ pub fn DashboardPage() -> impl IntoView {
                             description: svc.description.clone().unwrap_or_default(),
                             url: svc.url.clone().unwrap_or_default(),
                             icon: svc.icon.clone().unwrap_or_default(),
-                            group_id: None,
+                            group_id: svc.group_id,
                             probe_enabled: svc.probe_enabled,
                             probe_interval: svc.probe_interval,
                         };
@@ -322,7 +353,7 @@ pub fn DashboardPage() -> impl IntoView {
                     };
 
                     if svcs.is_empty() {
-                        EitherOf3::A(view! {
+                        EitherOf4::A(view! {
                             <div class="empty-state">
                                 <div class="empty-icon">
                                     <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
@@ -343,6 +374,63 @@ pub fn DashboardPage() -> impl IntoView {
                                 </div>
                             </div>
                         })
+                    } else if sort_mode.get() == SortMode::Group {
+                        let group_list = groups.get().unwrap_or_default();
+                        let known_ids: std::collections::HashSet<i64> =
+                            group_list.iter().map(|g| g.id).collect();
+
+                        // Build unified section list: (label, text_color, bg_color, border_color, services)
+                        type Section = (String, String, String, String, Vec<ServiceResponse>);
+                        let mut sections_data: Vec<Section> = group_list.iter().filter_map(|grp| {
+                            let gid = grp.id;
+                            let members: Vec<ServiceResponse> = svcs.iter()
+                                .filter(|s| s.group_id == Some(gid))
+                                .cloned()
+                                .collect();
+                            if members.is_empty() { return None; }
+                            Some((
+                                grp.name.clone(),
+                                "var(--color-accent)".to_string(),
+                                "var(--color-accent-dim)".to_string(),
+                                "rgba(59,130,246,0.3)".to_string(),
+                                members,
+                            ))
+                        }).collect();
+
+                        let ungrouped: Vec<ServiceResponse> = svcs.iter()
+                            .filter(|s| s.group_id.is_none_or(|gid| !known_ids.contains(&gid)))
+                            .cloned()
+                            .collect();
+                        if !ungrouped.is_empty() {
+                            sections_data.push((
+                                "Ungrouped".to_string(),
+                                "var(--color-text-muted)".to_string(),
+                                "rgba(75,85,99,0.12)".to_string(),
+                                "rgba(75,85,99,0.2)".to_string(),
+                                ungrouped,
+                            ));
+                        }
+
+                        let sections = sections_data.into_iter().map(|(label, color, bg, border, members)| {
+                            let cards = members.into_iter().map(render_card).collect_view();
+                            view! {
+                                <div style="margin-bottom:1.75rem;">
+                                    <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.75rem;">
+                                        <span style=format!(
+                                            "display:inline-flex; align-items:center; font-size:0.68rem; font-weight:700; \
+                                             letter-spacing:0.04em; text-transform:uppercase; \
+                                             color:{color}; background:{bg}; border:1px solid {border}; \
+                                             border-radius:20px; padding:3px 9px;"
+                                        )>{label}</span>
+                                        <div style="flex:1; height:1px; background:var(--color-border); opacity:0.4;"></div>
+                                    </div>
+                                    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,360px)); gap:1rem; justify-content:start;">
+                                        {cards}
+                                    </div>
+                                </div>
+                            }
+                        }).collect_view();
+                        EitherOf4::B(view! { <div>{sections}</div> })
                     } else if sort_mode.get() == SortMode::Source {
                         let get_src = |s: &ServiceResponse| -> String {
                             s.discovery_source.clone()
@@ -382,9 +470,9 @@ pub fn DashboardPage() -> impl IntoView {
                                 </div>
                             })
                         }).collect_view();
-                        EitherOf3::B(view! { <div>{sections}</div> })
+                        EitherOf4::C(view! { <div>{sections}</div> })
                     } else {
-                        EitherOf3::C(view! {
+                        EitherOf4::D(view! {
                             <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,360px)); gap:1rem; justify-content:start;">
                                 {svcs.into_iter().map(render_card).collect_view()}
                             </div>
@@ -446,6 +534,13 @@ pub fn DashboardPage() -> impl IntoView {
 
 async fn fetch_services() -> Result<Vec<ServiceResponse>, gloo_net::Error> {
     let resp = gloo_net::http::Request::get("/api/v1/services")
+        .send()
+        .await?;
+    resp.json().await
+}
+
+async fn fetch_groups() -> Result<Vec<GroupResponse>, gloo_net::Error> {
+    let resp = gloo_net::http::Request::get("/api/v1/groups")
         .send()
         .await?;
     resp.json().await
