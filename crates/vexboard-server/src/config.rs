@@ -149,6 +149,7 @@ impl AppConfig {
             .add_source(config::File::with_name("/etc/vexboard/config").required(false))
             .add_source(
                 config::Environment::with_prefix("VEXBOARD")
+                    .prefix_separator("_")
                     .separator("__")
                     .try_parsing(true),
             );
