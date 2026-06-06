@@ -38,7 +38,6 @@ pub fn SettingsPage() -> impl IntoView {
     let (new_role, set_new_role) = signal("viewer".to_string());
     let (user_error, set_user_error) = signal(String::new());
 
-    // Load users when the component mounts (admin only).
     #[cfg(target_arch = "wasm32")]
     leptos::prelude::Effect::new(move |_| {
         if is_admin() {
@@ -58,11 +57,26 @@ pub fn SettingsPage() -> impl IntoView {
                 <h1 class="page-title">"Settings"</h1>
             </div>
 
-            <div class="space-y-4" style="max-width: 540px">
-                // Appearance
+            <div class="settings-grid">
+                // ── Appearance ──────────────────────────────────────────
                 <div class="card">
-                    <h2 class="text-sm font-semibold mb-3"
-                        style="color: var(--color-text-primary)">"Appearance"</h2>
+                    <div class="settings-section-header">
+                        // Sun/moon icon
+                        <svg class="settings-section-icon" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                             stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="5"/>
+                            <line x1="12" y1="1" x2="12" y2="3"/>
+                            <line x1="12" y1="21" x2="12" y2="23"/>
+                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                            <line x1="1" y1="12" x2="3" y2="12"/>
+                            <line x1="21" y1="12" x2="23" y2="12"/>
+                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                        </svg>
+                        "Appearance"
+                    </div>
                     <div class="flex items-center justify-between gap-4">
                         <div>
                             <p class="text-sm" style="color: var(--color-text-secondary)">"Theme"</p>
@@ -103,10 +117,18 @@ pub fn SettingsPage() -> impl IntoView {
                     </div>
                 </div>
 
-                // Navigation Sidebar
+                // ── Navigation Sidebar ───────────────────────────────────
                 <div class="card">
-                    <h2 class="text-sm font-semibold mb-3"
-                        style="color: var(--color-text-primary)">"Navigation Sidebar"</h2>
+                    <div class="settings-section-header">
+                        // Layout/sidebar icon
+                        <svg class="settings-section-icon" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                             stroke-linejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                            <line x1="9" y1="3" x2="9" y2="21"/>
+                        </svg>
+                        "Navigation Sidebar"
+                    </div>
                     <div class="space-y-2">
                         {[
                             (SidebarMode::HoverExpand,     "Hover Expand",     "Collapsed by default, expands on hover."),
@@ -117,14 +139,20 @@ pub fn SettingsPage() -> impl IntoView {
                             let mode_for_click = mode.clone();
                             view! {
                                 <button
-                                    class=move || if sidebar_mode.get() == mode_for_class { "nav-item-active" } else { "nav-item" }
-                                    style="width: 100%; text-align: left; padding: 0.625rem 0.75rem;"
+                                    class=move || {
+                                        if sidebar_mode.get() == mode_for_class {
+                                            "settings-nav-option-active"
+                                        } else {
+                                            "settings-nav-option"
+                                        }
+                                    }
                                     on:click=move |_| {
                                         let m = mode_for_click.clone();
                                         save_sidebar_mode_to_storage(&m);
                                         set_sidebar_mode.set(m);
                                     }
                                 >
+                                    <span class="settings-nav-dot"></span>
                                     <div>
                                         <p class="text-sm font-medium">{label}</p>
                                         <p class="text-xs mt-0.5" style="color: var(--color-text-muted)">{desc}</p>
@@ -135,22 +163,58 @@ pub fn SettingsPage() -> impl IntoView {
                     </div>
                 </div>
 
-                // Discovery
+                // ── Service Discovery ────────────────────────────────────
                 <div class="card">
-                    <h2 class="text-sm font-semibold mb-2"
-                        style="color: var(--color-text-primary)">"Service Discovery"</h2>
-                    <p class="text-xs leading-relaxed"
-                       style="color: var(--color-text-muted)">
+                    <div class="settings-section-header">
+                        // Radar/search icon
+                        <svg class="settings-section-icon" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                             stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"/>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                            <circle cx="11" cy="11" r="3"/>
+                        </svg>
+                        "Service Discovery"
+                    </div>
+                    <p class="text-xs leading-relaxed" style="color: var(--color-text-muted)">
                         "VexBoard automatically discovers running systemd services via D-Bus. \
                          Discovered services appear in the dashboard for you to claim or dismiss."
                     </p>
                 </div>
 
-                // User Management (admin only)
+                // ── About ────────────────────────────────────────────────
+                <div class="card">
+                    <div class="settings-section-header">
+                        // Info-circle icon
+                        <svg class="settings-section-icon" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                             stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="8" x2="12" y2="12"/>
+                            <line x1="12" y1="16" x2="12.01" y2="16"/>
+                        </svg>
+                        "About"
+                    </div>
+                    <p class="text-xs" style="color: var(--color-text-muted)">
+                        "VexBoard v0.1.0 — Self-hosted server dashboard for NixOS and systemd."
+                    </p>
+                </div>
+
+                // ── User Management (admin only) — full width ────────────
                 <Show when=move || is_admin()>
-                    <div class="card">
-                        <h2 class="text-sm font-semibold mb-3"
-                            style="color: var(--color-text-primary)">"User Management"</h2>
+                    <div class="card settings-card-full">
+                        <div class="settings-section-header">
+                            // Users icon
+                            <svg class="settings-section-icon" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                 stroke-linejoin="round">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                                <circle cx="9" cy="7" r="4"/>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                            </svg>
+                            "User Management"
+                        </div>
 
                         // User list
                         <div style="margin-bottom:1rem;">
@@ -169,7 +233,7 @@ pub fn SettingsPage() -> impl IntoView {
                                     };
                                     view! {
                                         <div style="display:flex; align-items:center; justify-content:space-between; \
-                                                    padding:0.4rem 0; border-bottom:1px solid var(--color-border);">
+                                                    padding:0.5rem 0; border-bottom:1px solid var(--color-border);">
                                             <div style="display:flex; align-items:center; gap:0.5rem;">
                                                 <span style="font-size:0.82rem; color:var(--color-text-primary);">{uname.clone()}</span>
                                                 <span style=format!(
@@ -180,7 +244,6 @@ pub fn SettingsPage() -> impl IntoView {
                                                 )>{urole.clone()}</span>
                                             </div>
                                             <div style="display:flex; gap:0.5rem; align-items:center;">
-                                                // Toggle role button (not for self)
                                                 {(!is_self).then(|| {
                                                     let new_r = if urole == "admin" { "viewer" } else { "admin" };
                                                     let label = if urole == "admin" { "→ Viewer" } else { "→ Admin" };
@@ -206,7 +269,6 @@ pub fn SettingsPage() -> impl IntoView {
                                                         >{label}</button>
                                                     }
                                                 })}
-                                                // Delete button (not for self)
                                                 {(!is_self).then(|| view! {
                                                     <button
                                                         style="background:none; border:none; cursor:pointer; \
@@ -318,15 +380,6 @@ pub fn SettingsPage() -> impl IntoView {
                         </div>
                     </div>
                 </Show>
-
-                // About
-                <div class="card">
-                    <h2 class="text-sm font-semibold mb-2"
-                        style="color: var(--color-text-primary)">"About"</h2>
-                    <p class="text-xs" style="color: var(--color-text-muted)">
-                        "VexBoard v0.1.0 — Self-hosted server dashboard for NixOS and systemd."
-                    </p>
-                </div>
             </div>
         </div>
     }

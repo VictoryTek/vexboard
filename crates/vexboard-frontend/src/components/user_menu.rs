@@ -3,6 +3,46 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use serde::Deserialize;
 
+const AVATAR_COLORS: &[(&str, &str)] = &[
+    ("#3b82f6", "Blue"),
+    ("#6366f1", "Indigo"),
+    ("#a855f7", "Purple"),
+    ("#ec4899", "Pink"),
+    ("#10b981", "Emerald"),
+    ("#f59e0b", "Amber"),
+    ("#ef4444", "Red"),
+    ("#64748b", "Slate"),
+];
+
+#[cfg(target_arch = "wasm32")]
+const AVATAR_COLOR_KEY: &str = "vexboard-avatar-color";
+const DEFAULT_AVATAR_COLOR: &str = "#3b82f6";
+
+fn load_avatar_color() -> String {
+    #[cfg(target_arch = "wasm32")]
+    {
+        web_sys::window()
+            .and_then(|w| w.local_storage().ok().flatten())
+            .and_then(|s| s.get_item(AVATAR_COLOR_KEY).ok().flatten())
+            .unwrap_or_else(|| DEFAULT_AVATAR_COLOR.to_string())
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        DEFAULT_AVATAR_COLOR.to_string()
+    }
+}
+
+fn save_avatar_color(color: &str) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        if let Some(storage) = web_sys::window().and_then(|w| w.local_storage().ok().flatten()) {
+            let _ = storage.set_item(AVATAR_COLOR_KEY, color);
+        }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = color;
+}
+
 #[derive(Debug, Clone, Deserialize, Default)]
 struct MeResponse {
     username: String,
@@ -31,6 +71,8 @@ pub fn UserMenu() -> impl IntoView {
 
     let (dropdown_open, set_dropdown_open) = signal(false);
     let (modal_open, set_modal_open) = signal(false);
+
+    let (avatar_color, set_avatar_color) = signal(load_avatar_color());
 
     let (current_password, set_current_password) = signal(String::new());
     let (new_username, set_new_username) = signal(String::new());
@@ -114,7 +156,8 @@ pub fn UserMenu() -> impl IntoView {
         <div class="user-menu">
             <button class="user-menu-trigger"
                 on:click=move |_| set_dropdown_open.update(|v| *v = !*v)>
-                <span class="user-menu-avatar">
+                <span class="user-menu-avatar"
+                      style=move || format!("background: {}", avatar_color.get())>
                     {move || {
                         me.get()
                             .map(|m| {
@@ -155,6 +198,35 @@ pub fn UserMenu() -> impl IntoView {
             <div class="acct-modal-overlay">
                 <div class="acct-modal">
                     <h3>"Account Settings"</h3>
+
+                    // Avatar colour picker
+                    <div class="form-group">
+                        <label>"Avatar Color"</label>
+                        <div class="avatar-swatch-row">
+                            {AVATAR_COLORS.iter().map(|(hex, label)| {
+                                let hex = *hex;
+                                let label = *label;
+                                view! {
+                                    <button
+                                        class=move || {
+                                            if avatar_color.get() == hex {
+                                                "avatar-swatch avatar-swatch-active"
+                                            } else {
+                                                "avatar-swatch"
+                                            }
+                                        }
+                                        style=format!("background: {hex}")
+                                        title=label
+                                        on:click=move |_| {
+                                            set_avatar_color.set(hex.to_string());
+                                            save_avatar_color(hex);
+                                        }
+                                    />
+                                }
+                            }).collect_view()}
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <label>"Current Password"</label>
                         <input type="password"
