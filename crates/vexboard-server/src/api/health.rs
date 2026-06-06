@@ -3,7 +3,16 @@ use serde_json::json;
 
 use crate::AppState;
 
-pub async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
+#[utoipa::path(
+    get,
+    path = "/health",
+    tag = "health",
+    responses(
+        (status = 200, description = "Service is healthy"),
+        (status = 503, description = "Database unreachable"),
+    )
+)]
+pub(crate) async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
     let version = env!("CARGO_PKG_VERSION");
 
     // Quick DB connectivity check

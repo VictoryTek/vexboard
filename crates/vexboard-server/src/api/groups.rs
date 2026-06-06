@@ -18,8 +18,19 @@ pub fn router() -> Router<AppState> {
         .route("/{id}", put(update_group).delete(delete_group))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/groups",
+    tag = "groups",
+    security(("cookieAuth" = [])),
+    responses(
+        (status = 200, description = "List of all groups", body = Vec<Group>),
+        (status = 401, description = "Not authenticated"),
+        (status = 500, description = "Database error"),
+    )
+)]
 #[tracing::instrument(skip(state))]
-async fn list_groups(State(state): State<AppState>) -> impl IntoResponse {
+pub(crate) async fn list_groups(State(state): State<AppState>) -> impl IntoResponse {
     let groups = sqlx::query_as::<_, Group>(
         "SELECT id, name, icon, sort_order, created_at FROM groups ORDER BY sort_order ASC",
     )
@@ -38,8 +49,20 @@ async fn list_groups(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/groups",
+    tag = "groups",
+    security(("cookieAuth" = [])),
+    request_body = CreateGroup,
+    responses(
+        (status = 201, description = "Group created; returns new ID"),
+        (status = 401, description = "Not authenticated"),
+        (status = 500, description = "Database error"),
+    )
+)]
 #[tracing::instrument(skip(state, session))]
-async fn create_group(
+pub(crate) async fn create_group(
     State(state): State<AppState>,
     session: Session,
     Json(payload): Json<CreateGroup>,
@@ -85,8 +108,24 @@ async fn create_group(
     }
 }
 
+#[utoipa::path(
+    put,
+    path = "/api/v1/groups/{id}",
+    tag = "groups",
+    security(("cookieAuth" = [])),
+    params(
+        ("id" = i64, Path, description = "Group ID"),
+    ),
+    request_body = UpdateGroup,
+    responses(
+        (status = 200, description = "Group updated"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group not found"),
+        (status = 500, description = "Database error"),
+    )
+)]
 #[tracing::instrument(skip(state, session))]
-async fn update_group(
+pub(crate) async fn update_group(
     State(state): State<AppState>,
     session: Session,
     Path(id): Path<i64>,
@@ -158,8 +197,23 @@ async fn update_group(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/groups/{id}",
+    tag = "groups",
+    security(("cookieAuth" = [])),
+    params(
+        ("id" = i64, Path, description = "Group ID"),
+    ),
+    responses(
+        (status = 200, description = "Group deleted"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group not found"),
+        (status = 500, description = "Database error"),
+    )
+)]
 #[tracing::instrument(skip(state, session))]
-async fn delete_group(
+pub(crate) async fn delete_group(
     State(state): State<AppState>,
     session: Session,
     Path(id): Path<i64>,

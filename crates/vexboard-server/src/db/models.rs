@@ -1,7 +1,7 @@
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct Group {
     pub id: i64,
     pub name: String,
@@ -10,7 +10,7 @@ pub struct Group {
     pub created_at: Option<NaiveDateTime>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct Service {
     pub id: i64,
     pub systemd_unit: Option<String>,
@@ -29,17 +29,18 @@ pub struct Service {
     pub updated_at: Option<NaiveDateTime>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct User {
     pub id: i64,
     pub username: String,
+    #[schema(value_type = String, write_only = true)]
     pub password_hash: String,
     pub created_at: Option<NaiveDateTime>,
 }
 
 // --- Request/Response DTOs ---
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct CreateService {
     pub systemd_unit: Option<String>,
     pub discovery_source: Option<String>,
@@ -55,7 +56,7 @@ pub struct CreateService {
     pub visible: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct UpdateService {
     pub discovery_source: Option<String>,
     pub display_name: Option<String>,
@@ -70,33 +71,33 @@ pub struct UpdateService {
     pub visible: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct CreateGroup {
     pub name: String,
     pub icon: Option<String>,
     pub sort_order: Option<i64>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct UpdateGroup {
     pub name: Option<String>,
     pub icon: Option<String>,
     pub sort_order: Option<i64>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct UserInfo {
     pub id: i64,
     pub username: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct ServiceWithStatus {
     #[serde(flatten)]
     pub service: Service,
@@ -104,7 +105,7 @@ pub struct ServiceWithStatus {
     pub latency_ms: Option<i64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct QuickLink {
     pub id: i64,
     pub title: String,
@@ -114,7 +115,7 @@ pub struct QuickLink {
     pub sort_order: i64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct CreateQuickLink {
     pub title: String,
     pub url: String,
@@ -123,7 +124,7 @@ pub struct CreateQuickLink {
     pub sort_order: Option<i64>,
 }
 
-#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct AuditEvent {
     pub id: i64,
     pub actor: String,
@@ -135,7 +136,7 @@ pub struct AuditEvent {
     pub created_at: Option<NaiveDateTime>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct UpdateQuickLink {
     pub title: Option<String>,
     pub url: Option<String>,

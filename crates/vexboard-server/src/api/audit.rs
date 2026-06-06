@@ -15,10 +15,12 @@ pub fn router() -> Router<AppState> {
     Router::new().route("/", get(list_audit))
 }
 
-#[derive(Debug, Deserialize)]
-struct AuditQuery {
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub(crate) struct AuditQuery {
+    /// Maximum number of entries to return (1–500, default 50).
     #[serde(default = "default_limit")]
     limit: i64,
+    /// Pagination offset (default 0).
     #[serde(default)]
     offset: i64,
 }
@@ -27,8 +29,20 @@ fn default_limit() -> i64 {
     50
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/audit",
+    tag = "audit",
+    security(("cookieAuth" = [])),
+    params(AuditQuery),
+    responses(
+        (status = 200, description = "Paginated audit log entries"),
+        (status = 401, description = "Not authenticated"),
+        (status = 500, description = "Database error"),
+    )
+)]
 #[tracing::instrument(skip(state))]
-async fn list_audit(
+pub(crate) async fn list_audit(
     State(state): State<AppState>,
     Query(params): Query<AuditQuery>,
 ) -> impl IntoResponse {

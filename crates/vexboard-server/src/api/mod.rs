@@ -3,6 +3,7 @@ pub mod auth;
 pub mod groups;
 pub mod health;
 pub mod metrics;
+pub mod openapi;
 pub mod quick_links;
 pub mod services;
 pub mod setup;
@@ -15,6 +16,8 @@ use axum::response::IntoResponse;
 use axum::{Json, Router};
 use serde_json::json;
 use tower_sessions::Session;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 /// Middleware that rejects unauthenticated requests with 401.
 async fn require_auth(session: Session, request: Request, next: Next) -> impl IntoResponse {
@@ -40,11 +43,14 @@ pub fn router() -> Router<AppState> {
         .nest("/api/v1/audit", audit::router())
         .route_layer(middleware::from_fn(require_auth));
 
-    // Public routes: setup bootstrap, auth, and health check.
+    // Public routes: setup bootstrap, auth, health check, and OpenAPI docs.
     Router::new()
         .route("/api/v1/setup/status", axum::routing::get(setup::status))
         .route("/api/v1/setup", axum::routing::post(setup::create_admin))
         .nest("/api/v1/auth", auth::router())
         .route("/health", axum::routing::get(health::health_check))
+        .merge(
+            SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", openapi::ApiDoc::openapi()),
+        )
         .merge(protected)
 }

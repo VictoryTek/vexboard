@@ -21,7 +21,18 @@ pub fn router() -> Router<AppState> {
         )
 }
 
-async fn list_quick_links(State(state): State<AppState>) -> impl IntoResponse {
+#[utoipa::path(
+    get,
+    path = "/api/v1/quick-links",
+    tag = "quick-links",
+    security(("cookieAuth" = [])),
+    responses(
+        (status = 200, description = "List of all quick links", body = Vec<QuickLink>),
+        (status = 401, description = "Not authenticated"),
+        (status = 500, description = "Database error"),
+    )
+)]
+pub(crate) async fn list_quick_links(State(state): State<AppState>) -> impl IntoResponse {
     match sqlx::query_as::<_, QuickLink>(
         "SELECT id, title, url, icon, description, sort_order FROM quick_links ORDER BY sort_order ASC, id ASC",
     )
@@ -36,7 +47,19 @@ async fn list_quick_links(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
-async fn create_quick_link(
+#[utoipa::path(
+    post,
+    path = "/api/v1/quick-links",
+    tag = "quick-links",
+    security(("cookieAuth" = [])),
+    request_body = CreateQuickLink,
+    responses(
+        (status = 201, description = "Quick link created; returns new ID"),
+        (status = 401, description = "Not authenticated"),
+        (status = 500, description = "Database error"),
+    )
+)]
+pub(crate) async fn create_quick_link(
     State(state): State<AppState>,
     session: Session,
     Json(payload): Json<CreateQuickLink>,
@@ -65,7 +88,23 @@ async fn create_quick_link(
     }
 }
 
-async fn update_quick_link(
+#[utoipa::path(
+    put,
+    path = "/api/v1/quick-links/{id}",
+    tag = "quick-links",
+    security(("cookieAuth" = [])),
+    params(
+        ("id" = i64, Path, description = "Quick link ID"),
+    ),
+    request_body = UpdateQuickLink,
+    responses(
+        (status = 200, description = "Quick link updated"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Quick link not found"),
+        (status = 500, description = "Database error"),
+    )
+)]
+pub(crate) async fn update_quick_link(
     State(state): State<AppState>,
     session: Session,
     Path(id): Path<i64>,
@@ -144,7 +183,22 @@ async fn update_quick_link(
     }
 }
 
-async fn delete_quick_link(
+#[utoipa::path(
+    delete,
+    path = "/api/v1/quick-links/{id}",
+    tag = "quick-links",
+    security(("cookieAuth" = [])),
+    params(
+        ("id" = i64, Path, description = "Quick link ID"),
+    ),
+    responses(
+        (status = 200, description = "Quick link deleted"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Quick link not found"),
+        (status = 500, description = "Database error"),
+    )
+)]
+pub(crate) async fn delete_quick_link(
     State(state): State<AppState>,
     session: Session,
     Path(id): Path<i64>,

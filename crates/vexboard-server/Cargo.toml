@@ -34,6 +34,8 @@ tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["fs", "cors"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 bollard = { workspace = true }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

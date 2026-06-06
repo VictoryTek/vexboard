@@ -5,13 +5,21 @@ use serde_json::json;
 use crate::db;
 use crate::AppState;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct SetupRequest {
     pub username: String,
     pub password: String,
 }
 
 #[cfg(feature = "pam-auth")]
+#[utoipa::path(
+    get,
+    path = "/api/v1/setup/status",
+    tag = "setup",
+    responses(
+        (status = 200, description = "Setup status"),
+    )
+)]
 pub async fn status() -> impl axum::response::IntoResponse {
     (
         StatusCode::OK,
@@ -20,6 +28,14 @@ pub async fn status() -> impl axum::response::IntoResponse {
 }
 
 #[cfg(not(feature = "pam-auth"))]
+#[utoipa::path(
+    get,
+    path = "/api/v1/setup/status",
+    tag = "setup",
+    responses(
+        (status = 200, description = "Returns whether the initial admin setup is required"),
+    )
+)]
 pub async fn status(State(state): State<AppState>) -> impl axum::response::IntoResponse {
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
         .fetch_one(&state.db)
@@ -32,6 +48,18 @@ pub async fn status(State(state): State<AppState>) -> impl axum::response::IntoR
 }
 
 #[cfg(not(feature = "pam-auth"))]
+#[utoipa::path(
+    post,
+    path = "/api/v1/setup",
+    tag = "setup",
+    request_body = SetupRequest,
+    responses(
+        (status = 200, description = "Admin account created successfully"),
+        (status = 400, description = "Invalid username or password"),
+        (status = 409, description = "Setup already completed"),
+        (status = 500, description = "Internal error"),
+    )
+)]
 pub async fn create_admin(
     State(state): State<AppState>,
     Json(payload): Json<SetupRequest>,
@@ -94,6 +122,14 @@ pub async fn create_admin(
 }
 
 #[cfg(feature = "pam-auth")]
+#[utoipa::path(
+    post,
+    path = "/api/v1/setup",
+    tag = "setup",
+    responses(
+        (status = 410, description = "Not applicable in PAM mode"),
+    )
+)]
 pub async fn create_admin() -> impl axum::response::IntoResponse {
     (
         StatusCode::GONE,

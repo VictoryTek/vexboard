@@ -28,8 +28,19 @@ pub fn router() -> Router<AppState> {
         .route("/{id}/claim", post(claim_service))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/services",
+    tag = "services",
+    security(("cookieAuth" = [])),
+    responses(
+        (status = 200, description = "List of visible services with probe status", body = Vec<ServiceWithStatus>),
+        (status = 401, description = "Not authenticated"),
+        (status = 500, description = "Database error"),
+    )
+)]
 #[tracing::instrument(skip(state))]
-async fn list_services(State(state): State<AppState>) -> impl IntoResponse {
+pub(crate) async fn list_services(State(state): State<AppState>) -> impl IntoResponse {
     let svcs = match sqlx::query_as::<_, Service>(
         "SELECT id, systemd_unit, discovery_source, display_name, description, url, icon, group_id, \
          sort_order, probe_enabled, probe_interval, tags, visible, created_at, updated_at \
@@ -81,8 +92,20 @@ async fn list_services(State(state): State<AppState>) -> impl IntoResponse {
     (StatusCode::OK, Json(json!(result)))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/services",
+    tag = "services",
+    security(("cookieAuth" = [])),
+    request_body = CreateService,
+    responses(
+        (status = 201, description = "Service created; returns new ID"),
+        (status = 401, description = "Not authenticated"),
+        (status = 500, description = "Database error"),
+    )
+)]
 #[tracing::instrument(skip(state, session))]
-async fn create_service(
+pub(crate) async fn create_service(
     State(state): State<AppState>,
     session: Session,
     Json(payload): Json<CreateService>,
@@ -145,8 +168,24 @@ async fn create_service(
     }
 }
 
+#[utoipa::path(
+    put,
+    path = "/api/v1/services/{id}",
+    tag = "services",
+    security(("cookieAuth" = [])),
+    params(
+        ("id" = i64, Path, description = "Service ID"),
+    ),
+    request_body = UpdateService,
+    responses(
+        (status = 200, description = "Service updated"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Service not found"),
+        (status = 500, description = "Database error"),
+    )
+)]
 #[tracing::instrument(skip(state, session))]
-async fn update_service(
+pub(crate) async fn update_service(
     State(state): State<AppState>,
     session: Session,
     Path(id): Path<i64>,
@@ -255,8 +294,23 @@ async fn update_service(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/services/{id}",
+    tag = "services",
+    security(("cookieAuth" = [])),
+    params(
+        ("id" = i64, Path, description = "Service ID"),
+    ),
+    responses(
+        (status = 200, description = "Service deleted"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Service not found"),
+        (status = 500, description = "Database error"),
+    )
+)]
 #[tracing::instrument(skip(state, session))]
-async fn delete_service(
+pub(crate) async fn delete_service(
     State(state): State<AppState>,
     session: Session,
     Path(id): Path<i64>,
@@ -301,8 +355,24 @@ async fn delete_service(
 }
 
 /// Claim a discovered systemd unit — copies it into the services table with user-provided metadata.
+#[utoipa::path(
+    post,
+    path = "/api/v1/services/{id}/claim",
+    tag = "services",
+    security(("cookieAuth" = [])),
+    params(
+        ("id" = i64, Path, description = "Discovery unit ID (unused; payload drives insert)"),
+    ),
+    request_body = CreateService,
+    responses(
+        (status = 201, description = "Unit claimed and added to services"),
+        (status = 401, description = "Not authenticated"),
+        (status = 409, description = "Unit already claimed"),
+        (status = 500, description = "Database error"),
+    )
+)]
 #[tracing::instrument(skip(state, session))]
-async fn claim_service(
+pub(crate) async fn claim_service(
     State(state): State<AppState>,
     session: Session,
     Path(id): Path<i64>,

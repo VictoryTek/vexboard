@@ -18,7 +18,7 @@ use crate::AppState;
 use tower_sessions::Session;
 
 /// A discovered unit (systemd service or container) not yet claimed by the user.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct DiscoveredUnit {
     pub unit_name: String,
     pub description: String,
@@ -43,15 +43,38 @@ pub fn router() -> Router<AppState> {
 }
 
 /// List all unclaimed discovered systemd units.
+#[utoipa::path(
+    get,
+    path = "/api/v1/discovery",
+    tag = "discovery",
+    security(("cookieAuth" = [])),
+    responses(
+        (status = 200, description = "List of discovered unclaimed units", body = Vec<DiscoveredUnit>),
+        (status = 401, description = "Not authenticated"),
+    )
+)]
 #[tracing::instrument(skip(state))]
-async fn list_discovered(State(state): State<AppState>) -> impl IntoResponse {
+pub(crate) async fn list_discovered(State(state): State<AppState>) -> impl IntoResponse {
     let discoveries = state.discoveries.read().await;
     (StatusCode::OK, Json(json!(*discoveries)))
 }
 
 /// Trigger an immediate re-scan of systemd units.
+#[utoipa::path(
+    post,
+    path = "/api/v1/discovery/refresh",
+    tag = "discovery",
+    security(("cookieAuth" = [])),
+    responses(
+        (status = 202, description = "Refresh triggered in background"),
+        (status = 401, description = "Not authenticated"),
+    )
+)]
 #[tracing::instrument(skip(state, session))]
-async fn trigger_refresh(State(state): State<AppState>, session: Session) -> impl IntoResponse {
+pub(crate) async fn trigger_refresh(
+    State(state): State<AppState>,
+    session: Session,
+) -> impl IntoResponse {
     // Spawn a systemd refresh in the background
     let discoveries = state.discoveries.clone();
     let db = state.db.clone();

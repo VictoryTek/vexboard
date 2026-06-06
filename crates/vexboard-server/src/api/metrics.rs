@@ -23,8 +23,19 @@ pub fn router() -> Router<AppState> {
 }
 
 /// SSE endpoint streaming live system metrics and service status events.
+#[utoipa::path(
+    get,
+    path = "/api/v1/metrics/stream",
+    tag = "metrics",
+    security(("cookieAuth" = [])),
+    responses(
+        (status = 200, description = "Server-sent event stream of SystemSnapshot objects (text/event-stream)",
+         content_type = "text/event-stream"),
+        (status = 401, description = "Not authenticated"),
+    )
+)]
 #[tracing::instrument(skip(state))]
-async fn metrics_stream(
+pub(crate) async fn metrics_stream(
     State(state): State<AppState>,
 ) -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
     let rx = state.metrics_tx.subscribe();
@@ -40,8 +51,19 @@ async fn metrics_stream(
 }
 
 /// Single JSON snapshot of current system metrics (for initial page load).
+#[utoipa::path(
+    get,
+    path = "/api/v1/metrics/snapshot",
+    tag = "metrics",
+    security(("cookieAuth" = [])),
+    responses(
+        (status = 200, description = "Current system metrics snapshot"),
+        (status = 401, description = "Not authenticated"),
+        (status = 500, description = "Failed to read system metrics"),
+    )
+)]
 #[tracing::instrument]
-async fn metrics_snapshot() -> impl IntoResponse {
+pub(crate) async fn metrics_snapshot() -> impl IntoResponse {
     let snapshot = crate::metrics::system::read_snapshot().await;
     match snapshot {
         Ok(s) => (axum::http::StatusCode::OK, Json(json!(s))),

@@ -34,16 +34,27 @@ fn client_ip(connect_info: &ConnectInfo<SocketAddr>, headers: &HeaderMap) -> IpA
     connect_info.0.ip()
 }
 
-#[derive(Debug, Deserialize)]
-struct UpdateMeRequest {
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub(crate) struct UpdateMeRequest {
     current_password: String,
     new_username: Option<String>,
     new_password: Option<String>,
 }
 
 #[cfg(all(unix, feature = "pam-auth"))]
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/login",
+    tag = "auth",
+    request_body = LoginRequest,
+    responses(
+        (status = 200, description = "Login successful"),
+        (status = 401, description = "Invalid credentials"),
+        (status = 429, description = "Too many login attempts"),
+    )
+)]
 #[tracing::instrument(skip_all)]
-async fn login(
+pub(crate) async fn login(
     State(state): State<AppState>,
     connect_info: ConnectInfo<SocketAddr>,
     headers: HeaderMap,
@@ -100,8 +111,20 @@ async fn login(
 }
 
 #[cfg(not(all(unix, feature = "pam-auth")))]
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/login",
+    tag = "auth",
+    request_body = LoginRequest,
+    responses(
+        (status = 200, description = "Login successful", body = inline(crate::db::models::UserInfo)),
+        (status = 401, description = "Invalid credentials"),
+        (status = 429, description = "Too many login attempts"),
+        (status = 500, description = "Database error"),
+    )
+)]
 #[tracing::instrument(skip_all)]
-async fn login(
+pub(crate) async fn login(
     State(state): State<AppState>,
     connect_info: ConnectInfo<SocketAddr>,
     headers: HeaderMap,
@@ -191,8 +214,17 @@ async fn login(
     )
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/logout",
+    tag = "auth",
+    security(("cookieAuth" = [])),
+    responses(
+        (status = 200, description = "Logged out successfully"),
+    )
+)]
 #[tracing::instrument(skip_all)]
-async fn logout(State(state): State<AppState>, session: Session) -> impl IntoResponse {
+pub(crate) async fn logout(State(state): State<AppState>, session: Session) -> impl IntoResponse {
     let actor = session
         .get::<String>("username")
         .await
@@ -205,8 +237,18 @@ async fn logout(State(state): State<AppState>, session: Session) -> impl IntoRes
 }
 
 #[cfg(all(unix, feature = "pam-auth"))]
+#[utoipa::path(
+    get,
+    path = "/api/v1/auth/me",
+    tag = "auth",
+    security(("cookieAuth" = [])),
+    responses(
+        (status = 200, description = "Current authenticated user"),
+        (status = 401, description = "Not authenticated"),
+    )
+)]
 #[tracing::instrument(skip_all)]
-async fn me(session: Session) -> impl IntoResponse {
+pub(crate) async fn me(session: Session) -> impl IntoResponse {
     match session.get::<String>("username").await {
         Ok(Some(username)) => (
             StatusCode::OK,
@@ -220,8 +262,18 @@ async fn me(session: Session) -> impl IntoResponse {
 }
 
 #[cfg(not(all(unix, feature = "pam-auth")))]
+#[utoipa::path(
+    get,
+    path = "/api/v1/auth/me",
+    tag = "auth",
+    security(("cookieAuth" = [])),
+    responses(
+        (status = 200, description = "Current authenticated user"),
+        (status = 401, description = "Not authenticated"),
+    )
+)]
 #[tracing::instrument(skip_all)]
-async fn me(session: Session) -> impl IntoResponse {
+pub(crate) async fn me(session: Session) -> impl IntoResponse {
     match session.get::<String>("username").await {
         Ok(Some(username)) => (
             StatusCode::OK,
@@ -235,8 +287,17 @@ async fn me(session: Session) -> impl IntoResponse {
 }
 
 #[cfg(all(unix, feature = "pam-auth"))]
+#[utoipa::path(
+    patch,
+    path = "/api/v1/auth/me",
+    tag = "auth",
+    security(("cookieAuth" = [])),
+    responses(
+        (status = 405, description = "Credential changes not supported in PAM auth mode"),
+    )
+)]
 #[tracing::instrument(skip_all)]
-async fn update_me() -> impl IntoResponse {
+pub(crate) async fn update_me() -> impl IntoResponse {
     (
         StatusCode::METHOD_NOT_ALLOWED,
         Json(json!({"error": "credential changes not supported in PAM auth mode"})),
@@ -244,8 +305,23 @@ async fn update_me() -> impl IntoResponse {
 }
 
 #[cfg(not(all(unix, feature = "pam-auth")))]
+#[utoipa::path(
+    patch,
+    path = "/api/v1/auth/me",
+    tag = "auth",
+    security(("cookieAuth" = [])),
+    request_body = UpdateMeRequest,
+    responses(
+        (status = 200, description = "Credentials updated; session invalidated"),
+        (status = 400, description = "Validation error"),
+        (status = 401, description = "Not authenticated or wrong current password"),
+        (status = 403, description = "Invalid current password"),
+        (status = 409, description = "Username already taken"),
+        (status = 500, description = "Database error"),
+    )
+)]
 #[tracing::instrument(skip_all)]
-async fn update_me(
+pub(crate) async fn update_me(
     State(state): State<AppState>,
     session: Session,
     Json(payload): Json<UpdateMeRequest>,
