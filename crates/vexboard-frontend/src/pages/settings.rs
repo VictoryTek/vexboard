@@ -76,16 +76,24 @@ pub fn SettingsPage() -> impl IntoView {
                             on:click=move |_| {
                                 #[cfg(target_arch = "wasm32")]
                                 {
-                                    let doc = web_sys::window().unwrap().document().unwrap();
+                                    let win = web_sys::window().unwrap();
+                                    let doc = win.document().unwrap();
                                     let html = doc.document_element().unwrap();
+                                    let store = win.local_storage().ok().flatten();
                                     let is_dark = html.class_list().contains("dark")
                                         || !html.class_list().contains("light");
                                     if is_dark {
                                         html.class_list().remove_1("dark").ok();
                                         html.class_list().add_1("light").ok();
+                                        if let Some(s) = &store {
+                                            let _ = s.set_item("vexboard-theme", "light");
+                                        }
                                     } else {
                                         html.class_list().remove_1("light").ok();
                                         html.class_list().add_1("dark").ok();
+                                        if let Some(s) = &store {
+                                            let _ = s.set_item("vexboard-theme", "dark");
+                                        }
                                     }
                                 }
                             }

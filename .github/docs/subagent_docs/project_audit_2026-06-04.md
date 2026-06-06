@@ -275,17 +275,11 @@ VexBoard is a well-architected, actively developed project with solid fundamenta
 **8. ✅ DONE (2026-06-06) — Dashboard drag-to-reorder services**
 - `PATCH /api/v1/services/reorder` endpoint added (SQLite transaction, audit log). Frontend: draggable wrappers on service cards in Default sort mode, HTML5 DragEvent handlers compute new order on drop and PATCH backend. `DragEvent` added to web-sys features.
 
-**9. Multi-user access control (roles)**
-- **Problem:** All authenticated users have identical permissions. No read-only viewer role exists.
-- **Value:** Enables sharing the dashboard with team members without full admin privileges.
-- **Complexity:** High — add `role` column to `users`, check role in each handler, surface role management in settings.
-- **Builds on:** `crates/vexboard-server/src/api/auth.rs`, `crates/vexboard-server/src/db/models.rs`, `crates/vexboard-frontend/src/pages/settings.rs`.
+**9. ✅ DONE (2026-06-06) — Multi-user access control (roles)**
+- `role` column added to `users` via idempotent migration `003_user_roles.sql`. `require_admin` middleware in `api/mod.rs` gates all write routes. Full user CRUD at `/api/v1/users`. Frontend hides edit/delete for viewers; Settings page User Management card (admin only) with role toggle, delete, create form.
 
-**10. Dark/light mode toggle**
-- **Problem:** UI is hard-coded to dark mode (`<html class="dark">` in `crates/vexboard-frontend/src/main.rs:82`). There is no toggle.
-- **Value:** Accessibility and user preference support.
-- **Complexity:** Low — add a theme signal, persist to `localStorage`, toggle `dark` class on `<html>`, add a button to sidebar or user menu.
-- **Builds on:** `crates/vexboard-frontend/src/main.rs`, `crates/vexboard-frontend/src/components/sidebar.rs` or `user_menu.rs`.
+**10. ✅ DONE (2026-06-06) — Dark/light mode toggle**
+- Toggle button in Settings page (`crates/vexboard-frontend/src/pages/settings.rs`). Inline IIFE in `index.html` reads `localStorage.getItem('vexboard-theme')` before WASM loads (eliminates flash-of-wrong-theme). Toggle handler calls `localStorage.setItem` on each switch. Defaults to dark; persists across reloads.
 
 ---
 
