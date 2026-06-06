@@ -35,6 +35,15 @@ pub struct User {
     pub username: String,
     #[schema(value_type = String, write_only = true)]
     pub password_hash: String,
+    pub role: String,
+    pub created_at: Option<NaiveDateTime>,
+}
+
+#[derive(Debug, Clone, Serialize, sqlx::FromRow, utoipa::ToSchema)]
+pub struct UserPublic {
+    pub id: i64,
+    pub username: String,
+    pub role: String,
     pub created_at: Option<NaiveDateTime>,
 }
 
@@ -95,6 +104,20 @@ pub struct LoginRequest {
 pub struct UserInfo {
     pub id: i64,
     pub username: String,
+    pub role: String,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct CreateUserRequest {
+    pub username: String,
+    pub password: String,
+    pub role: String,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct UpdateUserRequest {
+    pub username: Option<String>,
+    pub role: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]

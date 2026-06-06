@@ -7,6 +7,7 @@ use crate::components::modal_groups::GroupsModal;
 use crate::components::quick_link_card::{QuickLinkCard, QuickLinkData};
 use crate::components::quick_link_modal::{QuickLinkFormData, QuickLinkModal};
 use crate::components::service_card::{ServiceCard, ServiceData};
+use crate::CurrentUser;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum SortMode {
@@ -63,6 +64,14 @@ fn resolve_groups(groups: &LocalResource<Vec<GroupResponse>>) -> Vec<GroupItem> 
 
 #[component]
 pub fn DashboardPage() -> impl IntoView {
+    let current_user = use_context::<RwSignal<Option<CurrentUser>>>();
+    let is_admin = move || {
+        current_user
+            .and_then(|u| u.get())
+            .map(|u| u.is_admin())
+            .unwrap_or(false)
+    };
+
     let services = LocalResource::new(|| async move { fetch_services().await.unwrap_or_default() });
     let quick_links =
         LocalResource::new(|| async move { fetch_quick_links().await.unwrap_or_default() });
@@ -275,7 +284,8 @@ pub fn DashboardPage() -> impl IntoView {
                         </button>
                     })}
 
-                    // "+ Add" dropdown
+                    // "+ Add" dropdown — admin only
+                    <Show when=move || is_admin()>
                     <div style="position:relative;">
                         <button class="btn-primary"
                             on:click=move |_| set_show_add_menu.update(|v| *v = !*v)
@@ -368,6 +378,7 @@ pub fn DashboardPage() -> impl IntoView {
                             </div>
                         </Show>
                     </div>
+                    </Show>
                 </div>
             </div>
 
@@ -409,17 +420,22 @@ pub fn DashboardPage() -> impl IntoView {
                             status: svc.status,
                             latency_ms: svc.latency_ms,
                         };
-                        let on_delete = Callback::new(move |_: i64| {
-                            spawn_local(async move {
-                                let _ = gloo_net::http::Request::delete(
-                                    &format!("/api/v1/services/{id}")
-                                ).send().await;
-                                services.refetch();
+                        let (on_delete, on_edit) = if is_admin() {
+                            let cb_delete = Callback::new(move |_: i64| {
+                                spawn_local(async move {
+                                    let _ = gloo_net::http::Request::delete(
+                                        &format!("/api/v1/services/{id}")
+                                    ).send().await;
+                                    services.refetch();
+                                });
                             });
-                        });
-                        let on_edit = Callback::new(move |_: i64| {
-                            edit_target.set(Some((id, edit_form.clone())));
-                        });
+                            let cb_edit = Callback::new(move |_: i64| {
+                                edit_target.set(Some((id, edit_form.clone())));
+                            });
+                            (Some(cb_delete), Some(cb_edit))
+                        } else {
+                            (None, None)
+                        };
                         view! { <ServiceCard service=data on_delete=on_delete on_edit=on_edit /> }
                     };
 
@@ -848,17 +864,22 @@ pub fn DashboardPage() -> impl IntoView {
                                             icon: link.icon,
                                             description: link.description,
                                         };
-                                        let on_delete = Callback::new(move |_: i64| {
-                                            spawn_local(async move {
-                                                let _ = gloo_net::http::Request::delete(
-                                                    &format!("/api/v1/quick-links/{id}")
-                                                ).send().await;
-                                                quick_links.refetch();
+                                        let (on_delete, on_edit) = if is_admin() {
+                                            let cb_delete = Callback::new(move |_: i64| {
+                                                spawn_local(async move {
+                                                    let _ = gloo_net::http::Request::delete(
+                                                        &format!("/api/v1/quick-links/{id}")
+                                                    ).send().await;
+                                                    quick_links.refetch();
+                                                });
                                             });
-                                        });
-                                        let on_edit = Callback::new(move |_: i64| {
-                                            edit_link_target.set(Some((id, edit_form.clone())));
-                                        });
+                                            let cb_edit = Callback::new(move |_: i64| {
+                                                edit_link_target.set(Some((id, edit_form.clone())));
+                                            });
+                                            (Some(cb_delete), Some(cb_edit))
+                                        } else {
+                                            (None, None)
+                                        };
                                         view! { <QuickLinkCard link=data on_delete=on_delete on_edit=on_edit /> }
                                     }).collect_view()}
                                 </div>

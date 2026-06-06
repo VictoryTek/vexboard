@@ -272,11 +272,8 @@ VexBoard is a well-architected, actively developed project with solid fundamenta
 **7. ✅ DONE (2026-06-05) — Webhook / notification support for probe state changes**
 - `[notifications]` config section added; webhook sender fires on probe state transitions. Commit: `feat(notify): webhook delivery on probe state transitions`.
 
-**8. Dashboard drag-to-reorder services**
-- **Problem:** `sort_order` columns exist on `services` and `groups` tables but there is no drag-and-drop UI on the dashboard.
-- **Value:** Basic UX improvement enabling users to arrange their dashboard layout.
-- **Complexity:** Medium — requires frontend drag-and-drop (via `web-sys` `DragEvent`) and a `PATCH /api/v1/services/reorder` endpoint.
-- **Builds on:** `sort_order` columns already in schema (`db/migrations/001_init.sql`), `crates/vexboard-server/src/api/services.rs`.
+**8. ✅ DONE (2026-06-06) — Dashboard drag-to-reorder services**
+- `PATCH /api/v1/services/reorder` endpoint added (SQLite transaction, audit log). Frontend: draggable wrappers on service cards in Default sort mode, HTML5 DragEvent handlers compute new order on drop and PATCH backend. `DragEvent` added to web-sys features.
 
 **9. Multi-user access control (roles)**
 - **Problem:** All authenticated users have identical permissions. No read-only viewer role exists.

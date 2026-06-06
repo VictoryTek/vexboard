@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use serde_json::json;
@@ -12,13 +12,15 @@ use crate::db::models::{CreateQuickLink, QuickLink, UpdateQuickLink};
 use crate::AppState;
 use tower_sessions::Session;
 
-pub fn router() -> Router<AppState> {
-    Router::new()
-        .route("/", get(list_quick_links).post(create_quick_link))
-        .route(
-            "/{id}",
-            axum::routing::put(update_quick_link).delete(delete_quick_link),
-        )
+pub fn read_router() -> Router<AppState> {
+    Router::new().route("/", get(list_quick_links))
+}
+
+pub fn admin_router() -> Router<AppState> {
+    Router::new().route("/", post(create_quick_link)).route(
+        "/{id}",
+        axum::routing::put(update_quick_link).delete(delete_quick_link),
+    )
 }
 
 #[utoipa::path(

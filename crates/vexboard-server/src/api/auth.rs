@@ -77,6 +77,10 @@ pub(crate) async fn login(
         if let Err(e) = session.insert("username", payload.username.clone()).await {
             tracing::error!("failed to persist session after login: {e}");
         }
+        // PAM users are always treated as admins (no DB role available).
+        if let Err(e) = session.insert("role", "admin".to_string()).await {
+            tracing::error!("failed to persist role in session after login: {e}");
+        }
         db::audit::insert(
             &state.db,
             &payload.username,
@@ -89,7 +93,7 @@ pub(crate) async fn login(
         .await;
         (
             StatusCode::OK,
-            Json(json!({ "user": { "username": payload.username } })),
+            Json(json!({ "user": { "username": payload.username, "role": "admin" } })),
         )
     } else {
         let detail = serde_json::json!({"username": payload.username}).to_string();
@@ -140,7 +144,7 @@ pub(crate) async fn login(
         );
     }
     let user = sqlx::query_as::<_, crate::db::models::User>(
-        "SELECT id, username, password_hash, created_at FROM users WHERE username = ?",
+        "SELECT id, username, password_hash, role, created_at FROM users WHERE username = ?",
     )
     .bind(&payload.username)
     .fetch_optional(&state.db)
@@ -195,6 +199,9 @@ pub(crate) async fn login(
     if let Err(e) = session.insert("username", user.username.clone()).await {
         tracing::error!("failed to persist session after login: {e}");
     }
+    if let Err(e) = session.insert("role", user.role.clone()).await {
+        tracing::error!("failed to persist role in session after login: {e}");
+    }
     db::audit::insert(
         &state.db,
         &user.username,
@@ -209,7 +216,7 @@ pub(crate) async fn login(
     (
         StatusCode::OK,
         Json(json!({
-            "user": crate::db::models::UserInfo { id: user.id, username: user.username }
+            "user": crate::db::models::UserInfo { id: user.id, username: user.username.clone(), role: user.role }
         })),
     )
 }
@@ -252,7 +259,7 @@ pub(crate) async fn me(session: Session) -> impl IntoResponse {
     match session.get::<String>("username").await {
         Ok(Some(username)) => (
             StatusCode::OK,
-            Json(json!({ "user": { "username": username, "auth_mode": "pam" } })),
+            Json(json!({ "user": { "username": username, "role": "admin", "auth_mode": "pam" } })),
         ),
         _ => (
             StatusCode::UNAUTHORIZED,
@@ -275,10 +282,20 @@ pub(crate) async fn me(session: Session) -> impl IntoResponse {
 #[tracing::instrument(skip_all)]
 pub(crate) async fn me(session: Session) -> impl IntoResponse {
     match session.get::<String>("username").await {
-        Ok(Some(username)) => (
-            StatusCode::OK,
-            Json(json!({ "user": { "username": username, "auth_mode": "local" } })),
-        ),
+        Ok(Some(username)) => {
+            let role = session
+                .get::<String>("role")
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "admin".to_string());
+            (
+                StatusCode::OK,
+                Json(
+                    json!({ "user": { "username": username, "role": role, "auth_mode": "local" } }),
+                ),
+            )
+        }
         _ => (
             StatusCode::UNAUTHORIZED,
             Json(json!({"error": "Not authenticated"})),
@@ -337,7 +354,7 @@ pub(crate) async fn update_me(
     };
 
     let user = match sqlx::query_as::<_, crate::db::models::User>(
-        "SELECT id, username, password_hash, created_at FROM users WHERE username = ?",
+        "SELECT id, username, password_hash, role, created_at FROM users WHERE username = ?",
     )
     .bind(&current_username)
     .fetch_optional(&state.db)

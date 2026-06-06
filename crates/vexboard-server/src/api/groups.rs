@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, put},
+    routing::{get, post, put},
     Json, Router,
 };
 use serde_json::json;
@@ -12,9 +12,13 @@ use crate::db::models::{CreateGroup, Group, UpdateGroup};
 use crate::AppState;
 use tower_sessions::Session;
 
-pub fn router() -> Router<AppState> {
+pub fn read_router() -> Router<AppState> {
+    Router::new().route("/", get(list_groups))
+}
+
+pub fn admin_router() -> Router<AppState> {
     Router::new()
-        .route("/", get(list_groups).post(create_group))
+        .route("/", post(create_group))
         .route("/{id}", put(update_group).delete(delete_group))
 }
 

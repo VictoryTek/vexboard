@@ -21,10 +21,14 @@ struct LatestProbe {
     latency_ms: Option<i64>,
 }
 
-pub fn router() -> Router<AppState> {
+pub fn read_router() -> Router<AppState> {
+    Router::new().route("/", get(list_services))
+}
+
+pub fn admin_router() -> Router<AppState> {
     Router::new()
         .route("/reorder", patch(reorder_services))
-        .route("/", get(list_services).post(create_service))
+        .route("/", post(create_service))
         .route("/{id}", put(update_service).delete(delete_service))
         .route("/{id}/claim", post(claim_service))
 }

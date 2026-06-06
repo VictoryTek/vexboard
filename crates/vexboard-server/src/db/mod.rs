@@ -52,6 +52,17 @@ async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
             .await?;
     }
 
+    // Add role column to users (003_user_roles.sql) — idempotent.
+    let has_role: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM pragma_table_info('users') WHERE name = 'role'")
+            .fetch_one(pool)
+            .await?;
+
+    if has_role == 0 {
+        let roles_sql = include_str!("migrations/003_user_roles.sql");
+        sqlx::raw_sql(roles_sql).execute(pool).await?;
+    }
+
     tracing::info!("Database migrations applied");
     Ok(())
 }

@@ -7,6 +7,18 @@ use leptos::task::spawn_local;
 use leptos_router::components::{Outlet, ParentRoute, Route, Router, Routes};
 use leptos_router::path;
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct CurrentUser {
+    pub username: String,
+    pub role: String,
+}
+
+impl CurrentUser {
+    pub fn is_admin(&self) -> bool {
+        self.role == "admin"
+    }
+}
+
 fn main() {
     console_error_panic_hook::set_once();
     mount_to_body(|| view! { <App/> });
@@ -74,6 +86,35 @@ fn App() -> impl IntoView {
 
 #[component]
 fn MainLayout() -> impl IntoView {
+    // Fetch current user (username + role) and provide via context.
+    // Defaults to viewer until resolved so write UI is hidden while loading.
+    let current_user: RwSignal<Option<CurrentUser>> = RwSignal::new(None);
+    provide_context(current_user);
+
+    #[cfg(target_arch = "wasm32")]
+    Effect::new(move |_| {
+        spawn_local(async move {
+            if let Ok(resp) = gloo_net::http::Request::get("/api/v1/auth/me").send().await {
+                if resp.status() == 401 {
+                    web_sys::window()
+                        .unwrap()
+                        .location()
+                        .set_href("/login")
+                        .ok();
+                    return;
+                }
+                if let Ok(body) = resp.json::<serde_json::Value>().await {
+                    let username = body["user"]["username"].as_str().unwrap_or("").to_string();
+                    let role = body["user"]["role"]
+                        .as_str()
+                        .unwrap_or("viewer")
+                        .to_string();
+                    current_user.set(Some(CurrentUser { username, role }));
+                }
+            }
+        });
+    });
+
     view! {
         <div style="display:flex; height:100vh; overflow:hidden;">
             <components::sidebar::Sidebar />

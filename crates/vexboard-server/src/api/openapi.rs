@@ -46,6 +46,10 @@ impl Modify for SecurityAddon {
         crate::api::quick_links::update_quick_link,
         crate::api::quick_links::delete_quick_link,
         crate::api::audit::list_audit,
+        crate::api::users::list_users,
+        crate::api::users::create_user,
+        crate::api::users::update_user,
+        crate::api::users::delete_user,
         crate::api::metrics::metrics_snapshot,
         crate::api::metrics::metrics_stream,
         crate::discovery::list_discovered,
@@ -67,6 +71,9 @@ impl Modify for SecurityAddon {
             crate::db::models::UpdateQuickLink,
             crate::db::models::ReorderItem,
             crate::db::models::AuditEvent,
+            crate::db::models::UserPublic,
+            crate::db::models::CreateUserRequest,
+            crate::db::models::UpdateUserRequest,
             crate::api::setup::SetupRequest,
             crate::discovery::DiscoveredUnit,
         )
@@ -82,6 +89,7 @@ impl Modify for SecurityAddon {
         (name = "audit", description = "Audit log — requires authentication"),
         (name = "metrics", description = "System metrics (REST snapshot + SSE stream)"),
         (name = "discovery", description = "Auto-discovery of systemd units and containers"),
+        (name = "users", description = "User management — admin only"),
     )
 )]
 pub struct ApiDoc;
