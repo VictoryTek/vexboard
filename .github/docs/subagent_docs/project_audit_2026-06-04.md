@@ -304,9 +304,8 @@ VexBoard is a well-architected, actively developed project with solid fundamenta
 
 ### 2.4 Tooling & Workflow Suggestions
 
-**1. Add a git pre-commit hook for formatting and lint**
-- Currently `cargo fmt --check` and `cargo clippy` are only enforced in CI and via manual `scripts/preflight.sh`. A git pre-commit hook catches violations before they reach CI, shortening the feedback loop.
-- **Implementation:** `.git/hooks/pre-commit` script (or `cargo-husky` / `lefthook`) running `cargo fmt --all -- --check` on staged `.rs` files.
+**1. ✅ DONE (2026-06-06) — Add a git pre-commit hook for formatting and lint**
+- `scripts/hooks/pre-commit` committed (executable). Skips when no `.rs` files are staged; runs `cargo fmt --all -- --check` then `cargo clippy --workspace -- -D warnings` (skippable via `SKIP_CLIPPY=1`). `scripts/install-hooks.sh` (Linux/macOS symlink installer) and `scripts/install-hooks.ps1` (Windows copy installer) added. Run once per checkout to activate.
 
 **2. Build out the test suite — start with API handler integration tests**
 - With 2 tests in the entire codebase, `cargo test --workspace` passes trivially and provides no regression safety. Adding skeleton integration tests using `axum::http::Request` + `tower::ServiceExt` would give CI a meaningful gate.
