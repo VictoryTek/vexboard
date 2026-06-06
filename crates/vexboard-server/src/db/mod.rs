@@ -63,6 +63,17 @@ async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
         sqlx::raw_sql(roles_sql).execute(pool).await?;
     }
 
+    // Add color column to groups (004_group_color.sql) — idempotent.
+    let has_color: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM pragma_table_info('groups') WHERE name = 'color'")
+            .fetch_one(pool)
+            .await?;
+
+    if has_color == 0 {
+        let color_sql = include_str!("migrations/004_group_color.sql");
+        sqlx::raw_sql(color_sql).execute(pool).await?;
+    }
+
     tracing::info!("Database migrations applied");
     Ok(())
 }

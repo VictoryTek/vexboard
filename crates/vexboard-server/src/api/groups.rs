@@ -36,7 +36,7 @@ pub fn admin_router() -> Router<AppState> {
 #[tracing::instrument(skip(state))]
 pub(crate) async fn list_groups(State(state): State<AppState>) -> impl IntoResponse {
     let groups = sqlx::query_as::<_, Group>(
-        "SELECT id, name, icon, sort_order, created_at FROM groups ORDER BY sort_order ASC",
+        "SELECT id, name, icon, color, sort_order, created_at FROM groups ORDER BY sort_order ASC",
     )
     .fetch_all(&state.db)
     .await;
@@ -71,12 +71,14 @@ pub(crate) async fn create_group(
     session: Session,
     Json(payload): Json<CreateGroup>,
 ) -> impl IntoResponse {
-    let result = sqlx::query("INSERT INTO groups (name, icon, sort_order) VALUES (?, ?, ?)")
-        .bind(&payload.name)
-        .bind(&payload.icon)
-        .bind(payload.sort_order.unwrap_or(0))
-        .execute(&state.db)
-        .await;
+    let result =
+        sqlx::query("INSERT INTO groups (name, icon, color, sort_order) VALUES (?, ?, ?, ?)")
+            .bind(&payload.name)
+            .bind(&payload.icon)
+            .bind(&payload.color)
+            .bind(payload.sort_order.unwrap_or(0))
+            .execute(&state.db)
+            .await;
 
     match result {
         Ok(r) => {
@@ -136,7 +138,7 @@ pub(crate) async fn update_group(
     Json(payload): Json<UpdateGroup>,
 ) -> impl IntoResponse {
     let existing = sqlx::query_as::<_, Group>(
-        "SELECT id, name, icon, sort_order, created_at FROM groups WHERE id = ?",
+        "SELECT id, name, icon, color, sort_order, created_at FROM groups WHERE id = ?",
     )
     .bind(id)
     .fetch_optional(&state.db)
@@ -161,15 +163,18 @@ pub(crate) async fn update_group(
 
     let name = payload.name.unwrap_or(existing.name);
     let icon = payload.icon.or(existing.icon);
+    let color = payload.color.or(existing.color);
     let sort_order = payload.sort_order.unwrap_or(existing.sort_order);
 
-    let result = sqlx::query("UPDATE groups SET name = ?, icon = ?, sort_order = ? WHERE id = ?")
-        .bind(&name)
-        .bind(&icon)
-        .bind(sort_order)
-        .bind(id)
-        .execute(&state.db)
-        .await;
+    let result =
+        sqlx::query("UPDATE groups SET name = ?, icon = ?, color = ?, sort_order = ? WHERE id = ?")
+            .bind(&name)
+            .bind(&icon)
+            .bind(&color)
+            .bind(sort_order)
+            .bind(id)
+            .execute(&state.db)
+            .await;
 
     match result {
         Ok(_) => {

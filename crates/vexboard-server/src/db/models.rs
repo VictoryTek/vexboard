@@ -6,6 +6,7 @@ pub struct Group {
     pub id: i64,
     pub name: String,
     pub icon: Option<String>,
+    pub color: Option<String>,
     pub sort_order: i64,
     pub created_at: Option<NaiveDateTime>,
 }
@@ -84,6 +85,7 @@ pub struct UpdateService {
 pub struct CreateGroup {
     pub name: String,
     pub icon: Option<String>,
+    pub color: Option<String>,
     pub sort_order: Option<i64>,
 }
 
@@ -91,6 +93,7 @@ pub struct CreateGroup {
 pub struct UpdateGroup {
     pub name: Option<String>,
     pub icon: Option<String>,
+    pub color: Option<String>,
     pub sort_order: Option<i64>,
 }
 

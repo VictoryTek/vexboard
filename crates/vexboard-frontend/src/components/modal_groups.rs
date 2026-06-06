@@ -1,12 +1,27 @@
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
+const PALETTE: &[(&str, &str)] = &[
+    ("Blue", "#3b82f6"),
+    ("Purple", "#8b5cf6"),
+    ("Green", "#22c55e"),
+    ("Orange", "#f97316"),
+    ("Red", "#ef4444"),
+    ("Pink", "#ec4899"),
+    ("Yellow", "#eab308"),
+    ("Teal", "#14b8a6"),
+    ("Gray", "#6b7280"),
+];
+
+const DEFAULT_COLOR: &str = "#3b82f6";
+
 #[derive(Debug, Clone, serde::Deserialize)]
 struct GroupEntry {
     id: i64,
     name: String,
     #[allow(dead_code)]
     icon: Option<String>,
+    color: Option<String>,
     sort_order: i64,
 }
 
@@ -21,6 +36,39 @@ async fn fetch_groups_internal() -> Vec<GroupEntry> {
 }
 
 #[component]
+fn ColorSwatches(
+    #[prop(into)] selected: Signal<String>,
+    #[prop(into)] on_select: Callback<String>,
+) -> impl IntoView {
+    view! {
+        <div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:0.375rem;">
+            {PALETTE.iter().map(|(label, hex)| {
+                let hex_str = hex.to_string();
+                let hex_for_click = hex_str.clone();
+                let hex_for_style = hex_str.clone();
+                view! {
+                    <button
+                        type="button"
+                        title=*label
+                        style=move || {
+                            let is_selected = selected.get() == hex_for_style;
+                            format!(
+                                "width:20px; height:20px; border-radius:50%; background:{hex_for_style}; \
+                                 border:{}; cursor:pointer; padding:0; flex-shrink:0; \
+                                 box-shadow:{};",
+                                if is_selected { "2px solid var(--color-text-primary)" } else { "2px solid transparent" },
+                                if is_selected { "0 0 0 1px var(--color-bg-surface)" } else { "none" },
+                            )
+                        }
+                        on:click=move |_| on_select.run(hex_for_click.clone())
+                    />
+                }
+            }).collect_view()}
+        </div>
+    }
+}
+
+#[component]
 pub fn GroupsModal(
     #[prop(into)] visible: Signal<bool>,
     #[prop(into)] on_close: Callback<()>,
@@ -31,21 +79,25 @@ pub fn GroupsModal(
     // id of the group currently being renamed
     let editing_id: RwSignal<Option<i64>> = RwSignal::new(None);
     let edit_name: RwSignal<String> = RwSignal::new(String::new());
+    let edit_color: RwSignal<String> = RwSignal::new(DEFAULT_COLOR.to_string());
 
     // new-group form
     let (new_name, set_new_name) = signal(String::new());
+    let (new_color, set_new_color) = signal(DEFAULT_COLOR.to_string());
 
     let do_create = move || {
         let name = new_name.get_untracked().trim().to_string();
         if name.is_empty() {
             return;
         }
+        let color = new_color.get_untracked();
         spawn_local(async move {
-            let body = serde_json::json!({ "name": name, "sort_order": 0 });
+            let body = serde_json::json!({ "name": name, "color": color, "sort_order": 0 });
             if let Ok(req) = gloo_net::http::Request::post("/api/v1/groups").json(&body) {
                 let _ = req.send().await;
             }
             set_new_name.set(String::new());
+            set_new_color.set(DEFAULT_COLOR.to_string());
             groups.refetch();
             on_saved.run(());
         });
@@ -57,9 +109,10 @@ pub fn GroupsModal(
             editing_id.set(None);
             return;
         }
+        let color = edit_color.get_untracked();
         let on_saved = on_saved;
         spawn_local(async move {
-            let body = serde_json::json!({ "name": name });
+            let body = serde_json::json!({ "name": name, "color": color });
             if let Ok(req) =
                 gloo_net::http::Request::put(&format!("/api/v1/groups/{id}")).json(&body)
             {
@@ -159,17 +212,20 @@ pub fn GroupsModal(
                                         let id = g.id;
                                         let name_str = g.name.clone();
                                         let name_for_rename = name_str.clone();
+                                        let group_color = g.color.clone()
+                                            .unwrap_or_else(|| DEFAULT_COLOR.to_string());
+                                        let group_color_swatch = group_color.clone();
                                         let is_first = i == 0;
                                         let is_last = i == len - 1;
                                         let is_editing = move || editing_id.get() == Some(id);
 
                                         view! {
-                                            <div style="display:flex; align-items:center; gap:0.5rem; \
+                                            <div style="display:flex; align-items:flex-start; gap:0.5rem; \
                                                         padding:0.5rem 0.625rem; border-radius:0.5rem; \
                                                         background:var(--color-bg-primary); border:1px solid var(--color-border);">
 
                                                 // Reorder buttons
-                                                <div style="display:flex; flex-direction:column; gap:1px; flex-shrink:0;">
+                                                <div style="display:flex; flex-direction:column; gap:1px; flex-shrink:0; padding-top:2px;">
                                                     <button
                                                         style=move || format!(
                                                             "background:none; border:none; cursor:{}; padding:1px 3px; \
@@ -202,6 +258,25 @@ pub fn GroupsModal(
                                                             <polyline points="6 9 12 15 18 9"/>
                                                         </svg>
                                                     </button>
+                                                </div>
+
+                                                // Color dot (non-editing) or swatch picker (editing)
+                                                <div style="flex-shrink:0; display:flex; align-items:flex-start; padding-top:3px;">
+                                                    {move || if is_editing() {
+                                                        leptos::either::Either::Left(view! {
+                                                            <ColorSwatches
+                                                                selected=Signal::derive(move || edit_color.get())
+                                                                on_select=Callback::new(move |c: String| edit_color.set(c))
+                                                            />
+                                                        })
+                                                    } else {
+                                                        leptos::either::Either::Right(view! {
+                                                            <div style=format!(
+                                                                "width:12px; height:12px; border-radius:50%; \
+                                                                 background:{group_color_swatch}; margin-top:1px; flex-shrink:0;"
+                                                            )/>
+                                                        })
+                                                    }}
                                                 </div>
 
                                                 // Name — inline edit or label
@@ -241,6 +316,7 @@ pub fn GroupsModal(
                                                     title="Rename"
                                                     on:click=move |_| {
                                                         edit_name.set(name_for_rename.clone());
+                                                        edit_color.set(group_color.clone());
                                                         editing_id.set(Some(id));
                                                     }
                                                 >
@@ -284,20 +360,26 @@ pub fn GroupsModal(
                                    letter-spacing:0.06em; color:var(--color-text-muted); margin:0 0 0.5rem;">
                             "New Group"
                         </p>
-                        <div style="display:flex; gap:0.5rem;">
-                            <input
-                                type="text"
-                                class="form-input"
-                                placeholder="Group name"
-                                prop:value=move || new_name.get()
-                                on:input=move |ev| set_new_name.set(event_target_value(&ev))
-                                on:keydown=move |ev| {
-                                    use wasm_bindgen::JsCast;
-                                    if let Some(ke) = ev.dyn_ref::<web_sys::KeyboardEvent>() {
-                                        if ke.key() == "Enter" { do_create(); }
+                        <div style="display:flex; gap:0.5rem; align-items:flex-start;">
+                            <div style="flex:1; display:flex; flex-direction:column; gap:0.375rem;">
+                                <input
+                                    type="text"
+                                    class="form-input"
+                                    placeholder="Group name"
+                                    prop:value=move || new_name.get()
+                                    on:input=move |ev| set_new_name.set(event_target_value(&ev))
+                                    on:keydown=move |ev| {
+                                        use wasm_bindgen::JsCast;
+                                        if let Some(ke) = ev.dyn_ref::<web_sys::KeyboardEvent>() {
+                                            if ke.key() == "Enter" { do_create(); }
+                                        }
                                     }
-                                }
-                            />
+                                />
+                                <ColorSwatches
+                                    selected=Signal::derive(move || new_color.get())
+                                    on_select=Callback::new(move |c: String| set_new_color.set(c))
+                                />
+                            </div>
                             <button
                                 class="btn-primary"
                                 style="flex-shrink:0; white-space:nowrap;"

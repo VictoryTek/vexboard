@@ -37,6 +37,7 @@ struct ServiceResponse {
 struct GroupResponse {
     id: i64,
     name: String,
+    color: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -477,12 +478,24 @@ pub fn DashboardPage() -> impl IntoView {
                             if members.is_empty() { return None; }
                             members.sort_by(|a, b| a.sort_order.cmp(&b.sort_order)
                                 .then_with(|| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase())));
+                            let (text_color, bg_color, border_color) = match &grp.color {
+                                Some(hex) => (
+                                    hex.clone(),
+                                    format!("{hex}22"),
+                                    format!("{hex}50"),
+                                ),
+                                None => (
+                                    "var(--color-accent)".to_string(),
+                                    "var(--color-accent-dim)".to_string(),
+                                    "rgba(59,130,246,0.3)".to_string(),
+                                ),
+                            };
                             Some((
                                 gid.to_string(),
                                 grp.name.clone(),
-                                "var(--color-accent)".to_string(),
-                                "var(--color-accent-dim)".to_string(),
-                                "rgba(59,130,246,0.3)".to_string(),
+                                text_color,
+                                bg_color,
+                                border_color,
                                 members,
                             ))
                         }).collect();
