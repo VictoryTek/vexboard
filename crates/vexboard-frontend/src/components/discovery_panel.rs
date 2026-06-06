@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
-use crate::components::modal_edit::{EditFormData, EditModal};
+use crate::components::modal_edit::{EditFormData, EditModal, GroupItem};
 
 #[derive(Debug, Clone, serde::Deserialize)]
 struct DiscoveredUnitFe {
@@ -37,6 +37,12 @@ impl DiscoveredUnitFe {
     }
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+struct GroupEntryFe {
+    id: i64,
+    name: String,
+}
+
 async fn fetch_discovered_units() -> Vec<DiscoveredUnitFe> {
     let Ok(resp) = gloo_net::http::Request::get("/api/v1/discovery")
         .send()
@@ -52,9 +58,20 @@ async fn fetch_discovered_units() -> Vec<DiscoveredUnitFe> {
         .unwrap_or_default()
 }
 
+async fn fetch_groups_for_panel() -> Vec<GroupEntryFe> {
+    let Ok(resp) = gloo_net::http::Request::get("/api/v1/groups").send().await else {
+        return Vec::new();
+    };
+    if !resp.ok() {
+        return Vec::new();
+    }
+    resp.json::<Vec<GroupEntryFe>>().await.unwrap_or_default()
+}
+
 #[component]
 pub fn DiscoveryPanel(#[prop(into)] on_added: Callback<()>) -> impl IntoView {
     let units = LocalResource::new(fetch_discovered_units);
+    let groups = LocalResource::new(fetch_groups_for_panel);
     let (editing, set_editing) = signal::<Option<DiscoveredUnitFe>>(None);
     let (selected_source, set_selected_source) = signal::<Option<String>>(None);
     let (selected_unit_name, set_selected_unit_name) = signal::<Option<String>>(None);
@@ -70,6 +87,7 @@ pub fn DiscoveryPanel(#[prop(into)] on_added: Callback<()>) -> impl IntoView {
                 "description": if data.description.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(data.description) },
                 "url": if data.url.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(data.url) },
                 "icon": if data.icon.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(data.icon) },
+                "group_id": data.group_id,
                 "probe_enabled": data.probe_enabled,
                 "probe_interval": data.probe_interval,
             });
@@ -99,6 +117,12 @@ pub fn DiscoveryPanel(#[prop(into)] on_added: Callback<()>) -> impl IntoView {
                 probe_enabled: true,
                 probe_interval: 30,
             };
+            let group_items: Vec<GroupItem> = groups
+                .get()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|g| GroupItem { id: g.id, name: g.name })
+                .collect();
             view! {
                 <EditModal
                     visible=Signal::derive(|| true)
@@ -110,6 +134,7 @@ pub fn DiscoveryPanel(#[prop(into)] on_added: Callback<()>) -> impl IntoView {
                     on_save=on_save
                     title="Add Discovered Service"
                     initial=init
+                    groups=group_items
                 />
             }
         })}

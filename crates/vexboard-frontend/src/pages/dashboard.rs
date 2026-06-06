@@ -3,6 +3,7 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 
 use crate::components::modal_edit::{EditFormData, EditModal, GroupItem};
+use crate::components::modal_groups::GroupsModal;
 use crate::components::quick_link_card::{QuickLinkCard, QuickLinkData};
 use crate::components::quick_link_modal::{QuickLinkFormData, QuickLinkModal};
 use crate::components::service_card::{ServiceCard, ServiceData};
@@ -68,6 +69,7 @@ pub fn DashboardPage() -> impl IntoView {
 
     let (show_modal, set_show_modal) = signal(false);
     let (show_add_menu, set_show_add_menu) = signal(false);
+    let (show_groups_modal, set_show_groups_modal) = signal(false);
     let (sort_mode, set_sort_mode) = signal(SortMode::Default);
 
     // Edit targets
@@ -111,6 +113,13 @@ pub fn DashboardPage() -> impl IntoView {
     });
 
     view! {
+        // Group management modal
+        <GroupsModal
+            visible=show_groups_modal
+            on_close=Callback::new(move |_| set_show_groups_modal.set(false))
+            on_saved=Callback::new(move |_| { groups.refetch(); services.refetch(); })
+        />
+
         // Add service modal — reactive wrapper ensures groups prop updates when resource loads
         {move || view! {
             <EditModal
@@ -293,6 +302,26 @@ pub fn DashboardPage() -> impl IntoView {
                                         <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
                                     </svg>
                                     "Quick Link"
+                                </button>
+                                <div style="height:1px; background:var(--color-border); margin:0.2rem 0.4rem;"></div>
+                                <button
+                                    style="width:100%; background:none; border:none; cursor:pointer; \
+                                           display:flex; align-items:center; gap:0.6rem; \
+                                           padding:0.5rem 0.75rem; border-radius:0.4rem; \
+                                           font-size:0.82rem; color:var(--color-text-primary); text-align:left;"
+                                    onmouseover="this.style.background='var(--color-bg-hover)'"
+                                    onmouseout="this.style.background='none'"
+                                    on:click=move |_| {
+                                        set_show_add_menu.set(false);
+                                        set_show_groups_modal.set(true);
+                                    }
+                                >
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                                         stroke="currentColor" stroke-width="2"
+                                         stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                                    </svg>
+                                    "Manage Groups"
                                 </button>
                             </div>
                         </Show>
