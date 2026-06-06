@@ -291,13 +291,8 @@ VexBoard is a well-architected, actively developed project with solid fundamenta
 **2. ✅ DONE (2026-06-06) — Consolidate feature-gated auth handler duplication**
 - `login` unified into one public handler + two private cfg-gated helpers (`login_pam` / `login_local`); rate limit check and IP extraction live once. `me` collapsed into one function with an inline cfg assignment. `update_me` intentionally kept feature-gated — PAM version is a zero-arg 405 stub; unifying signatures would cause 422 errors in PAM mode (comment documents this).
 
-**3. Split `dashboard.rs` into sub-components**
-- **What:** Extract from `crates/vexboard-frontend/src/pages/dashboard.rs` (459 lines):
-  - `ServiceGrid` component (service card rendering + sort state)
-  - `DashboardModals` component (edit modal, quick link modal, discovery panel)
-  - Optionally `QuickLinksSection`
-- **Why:** The file mixes three distinct concerns and is the largest in the codebase. It will grow as features are added.
-- **Risk:** Low — Leptos component extraction is well-defined; signals can be passed as props or via context.
+**3. ✅ DONE (2026-06-06) — Split `dashboard.rs` into sub-components**
+- `pages/dashboard.rs` (940 lines) converted to `pages/dashboard/` module directory. Extracted: `DashboardModals` (modals.rs, ~115 lines), `ServiceGrid` (service_grid.rs, ~295 lines), `QuickLinksSection` (quick_links_section.rs, ~75 lines). `mod.rs` retains types, async helpers, DashboardPage, and page header (~250 lines). Modal show signals consolidated to `RwSignal<bool>`.
 
 **4. Create a shared user query helper in the `db/` module**
 - **What:** Extract the repeated `SELECT id, username, password_hash, created_at FROM users WHERE username = ?` query at `crates/vexboard-server/src/api/auth.rs:62` and `:165` into a `db::get_user_by_username(pool, username)` helper.
