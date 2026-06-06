@@ -10,6 +10,8 @@ use crate::db::models::Service;
 #[derive(Debug, Clone, Serialize)]
 pub struct ProbeEvent {
     pub service_id: i64,
+    pub service_name: String,
+    pub url: Option<String>,
     pub status: String,
     pub latency_ms: Option<i64>,
 }
@@ -92,6 +94,8 @@ pub async fn probe_service(
     // Broadcast event
     let event = ProbeEvent {
         service_id: svc.id,
+        service_name: svc.display_name.clone(),
+        url: svc.url.clone(),
         status,
         latency_ms,
     };

@@ -3,6 +3,7 @@ mod config;
 mod db;
 mod discovery;
 mod metrics;
+mod notify;
 mod probe;
 mod rate_limit;
 mod session_store;
@@ -106,6 +107,16 @@ async fn main() -> anyhow::Result<()> {
     let metrics_interval = config.metrics.push_interval_ms;
     tokio::spawn(async move {
         metrics::system::metrics_loop(metrics_tx_clone, metrics_interval).await;
+    });
+
+    let notify_config = config.notifications.clone();
+    let notify_rx = probe_tx.subscribe();
+    let notify_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .unwrap_or_default();
+    tokio::spawn(async move {
+        notify::notification_loop(notify_rx, notify_config, notify_client).await;
     });
 
     // Build router — use a SQLite-backed session store so sessions survive restarts.

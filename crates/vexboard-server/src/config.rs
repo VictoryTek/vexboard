@@ -11,6 +11,8 @@ pub struct AppConfig {
     pub docker: DockerConfig,
     pub probe: ProbeConfig,
     pub metrics: MetricsConfig,
+    #[serde(default)]
+    pub notifications: NotificationsConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -93,6 +95,45 @@ pub struct ProbeConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct MetricsConfig {
     pub push_interval_ms: u64,
+}
+
+/// A single webhook endpoint configuration.
+#[derive(Debug, Clone, Deserialize)]
+pub struct WebhookConfig {
+    pub url: String,
+    /// Event types to deliver. Empty means all events are delivered.
+    /// Supported values: `"service.down"`, `"service.up"`
+    #[serde(default)]
+    pub events: Vec<String>,
+    /// Per-webhook HMAC-SHA256 signing secret. Overrides the global `webhook_secret` when set.
+    #[serde(default)]
+    pub secret: String,
+}
+
+/// Notification / webhook configuration.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct NotificationsConfig {
+    /// Global HMAC-SHA256 signing secret applied to all webhooks that do not set their own
+    /// `secret`. Leave empty to disable request signing.
+    #[serde(default)]
+    pub webhook_secret: String,
+    /// Number of retry attempts after an initial delivery failure (default 2).
+    #[serde(default = "default_retry_count")]
+    pub retry_count: u32,
+    /// Base delay in seconds between retries, multiplied by the attempt number (default 2).
+    #[serde(default = "default_retry_delay_secs")]
+    pub retry_delay_secs: u64,
+    /// Webhook endpoint configurations.
+    #[serde(default)]
+    pub webhooks: Vec<WebhookConfig>,
+}
+
+fn default_retry_count() -> u32 {
+    2
+}
+
+fn default_retry_delay_secs() -> u64 {
+    2
 }
 
 impl AppConfig {

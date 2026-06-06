@@ -105,3 +105,19 @@ max_history = 100  # probe_results rows per service to retain
 
 [metrics]
 push_interval_ms = 2000  # SSE push frequency
+
+[notifications]
+# HMAC-SHA256 signing secret applied to all webhooks (leave empty to skip signing).
+# Override per-webhook with a local `secret` field.
+webhook_secret = ""
+# Retry settings for failed webhook deliveries.
+retry_count = 2
+retry_delay_secs = 2
+# Define webhook endpoints below. Webhooks fire only on service state transitions
+# (up→down, down→up). The first probe result after startup is silently recorded
+# to avoid an alert flood at boot.
+#
+# [[notifications.webhooks]]
+# url = "https://hooks.example.com/vexboard"
+# events = ["service.down", "service.up"]  # omit to receive all events
+# secret = ""  # per-webhook HMAC secret override

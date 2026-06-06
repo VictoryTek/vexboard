@@ -36,6 +36,8 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 bollard = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
+hmac = "0.12"
+sha2 = "0.10"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
