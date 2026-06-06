@@ -169,7 +169,9 @@
     background-color: var(--color-bg-surface);
     border-bottom: 1px solid var(--color-border);
     flex-shrink: 0;
-    overflow: hidden;
+    overflow: visible;
+    position: relative;
+    z-index: 100;
   }
 
   .metric-item {
