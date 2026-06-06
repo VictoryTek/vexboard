@@ -113,16 +113,16 @@ async fn discover_from_socket(
         }
 
         // Skip if already claimed by either display_name or systemd_unit.
-        let claimed = sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM services WHERE display_name = ? OR systemd_unit = ?",
+        let claimed = sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM services WHERE display_name = ? OR systemd_unit = ? LIMIT 1)",
         )
         .bind(&name)
         .bind(&name)
         .fetch_one(db)
         .await
-        .unwrap_or(0);
+        .unwrap_or(false);
 
-        if claimed > 0 {
+        if claimed {
             continue;
         }
 

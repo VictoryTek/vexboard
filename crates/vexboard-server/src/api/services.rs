@@ -470,14 +470,15 @@ pub(crate) async fn claim_service(
     Json(payload): Json<CreateService>,
 ) -> axum::response::Response {
     if let Some(ref unit) = payload.systemd_unit {
-        let exists =
-            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM services WHERE systemd_unit = ?")
-                .bind(unit)
-                .fetch_one(&state.db)
-                .await
-                .unwrap_or(0);
+        let exists = sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM services WHERE systemd_unit = ? LIMIT 1)",
+        )
+        .bind(unit)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(false);
 
-        if exists > 0 {
+        if exists {
             return (
                 StatusCode::CONFLICT,
                 Json(json!({"error": "Unit already claimed"})),

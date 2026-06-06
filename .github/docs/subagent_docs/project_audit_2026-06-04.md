@@ -297,13 +297,8 @@ VexBoard is a well-architected, actively developed project with solid fundamenta
 **4. ✅ DONE (2026-06-06) — Create a shared user query helper in the `db/` module**
 - `crates/vexboard-server/src/db/users.rs` created with `pub async fn get_user_by_username(pool, username)`. Helper is cfg-gated `#[cfg(not(all(unix, feature = "pam-auth")))]` matching both callers. Both inline query blocks in `auth.rs` (`login_local` and `update_me`) replaced with helper calls. `pub mod users;` added to `db/mod.rs`.
 
-**5. Replace `COUNT(*)` with `EXISTS` for duplicate detection**
-- **What:** Change the three `SELECT COUNT(*) FROM ... WHERE ...` existence checks to `SELECT EXISTS(SELECT 1 FROM ... WHERE ... LIMIT 1)` in:
-  - `crates/vexboard-server/src/discovery/systemd.rs:98–102`
-  - `crates/vexboard-server/src/discovery/docker.rs:117–123`
-  - `crates/vexboard-server/src/api/services.rs:234–238`
-- **Why:** `EXISTS` short-circuits on first match; `COUNT(*)` scans all matching rows. Semantically equivalent, more correct by intent.
-- **Risk:** None.
+**5. ✅ DONE (2026-06-06) — Replace `COUNT(*)` with `EXISTS` for duplicate detection**
+- All three `SELECT COUNT(*) ... unwrap_or(0) > 0` blocks replaced with `SELECT EXISTS(SELECT 1 FROM ... LIMIT 1)` returning `bool`. Locations: `discovery/systemd.rs` (systemd_unit check), `discovery/docker.rs` (display_name OR systemd_unit check), `api/services.rs` `claim_service` (systemd_unit check). Fallback changed to `unwrap_or(false)`; branch simplified from `> 0` to direct boolean.
 
 ---
 

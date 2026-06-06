@@ -94,14 +94,15 @@ pub async fn discover_units(
         }
 
         // Check if already claimed in DB
-        let claimed =
-            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM services WHERE systemd_unit = ?")
-                .bind(name)
-                .fetch_one(db)
-                .await
-                .unwrap_or(0);
+        let claimed = sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM services WHERE systemd_unit = ? LIMIT 1)",
+        )
+        .bind(name)
+        .fetch_one(db)
+        .await
+        .unwrap_or(false);
 
-        if claimed > 0 {
+        if claimed {
             continue;
         }
 
