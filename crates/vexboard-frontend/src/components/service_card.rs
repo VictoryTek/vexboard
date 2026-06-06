@@ -78,7 +78,7 @@ pub fn ServiceCard(
     let card_style = if has_url {
         "display:block; text-decoration:none; cursor:pointer;"
     } else {
-        "display:block; text-decoration:none; cursor:default; pointer-events:none;"
+        "display:block; text-decoration:none; cursor:default;"
     };
 
     view! {
@@ -88,6 +88,7 @@ pub fn ServiceCard(
             rel="noopener noreferrer"
             class="service-card"
             style={card_style}
+            on:click=move |ev| { if !has_url { ev.prevent_default(); } }
         >
             // Top row: icon + title (left) | source badge (right)
             <div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; margin-bottom:0.35rem;">
