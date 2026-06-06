@@ -294,10 +294,8 @@ VexBoard is a well-architected, actively developed project with solid fundamenta
 **3. ✅ DONE (2026-06-06) — Split `dashboard.rs` into sub-components**
 - `pages/dashboard.rs` (940 lines) converted to `pages/dashboard/` module directory. Extracted: `DashboardModals` (modals.rs, ~115 lines), `ServiceGrid` (service_grid.rs, ~295 lines), `QuickLinksSection` (quick_links_section.rs, ~75 lines). `mod.rs` retains types, async helpers, DashboardPage, and page header (~250 lines). Modal show signals consolidated to `RwSignal<bool>`.
 
-**4. Create a shared user query helper in the `db/` module**
-- **What:** Extract the repeated `SELECT id, username, password_hash, created_at FROM users WHERE username = ?` query at `crates/vexboard-server/src/api/auth.rs:62` and `:165` into a `db::get_user_by_username(pool, username)` helper.
-- **Why:** DRY principle — if the query or model changes, one update instead of two.
-- **Risk:** Minimal — mechanical extraction.
+**4. ✅ DONE (2026-06-06) — Create a shared user query helper in the `db/` module**
+- `crates/vexboard-server/src/db/users.rs` created with `pub async fn get_user_by_username(pool, username)`. Helper is cfg-gated `#[cfg(not(all(unix, feature = "pam-auth")))]` matching both callers. Both inline query blocks in `auth.rs` (`login_local` and `update_me`) replaced with helper calls. `pub mod users;` added to `db/mod.rs`.
 
 **5. Replace `COUNT(*)` with `EXISTS` for duplicate detection**
 - **What:** Change the three `SELECT COUNT(*) FROM ... WHERE ...` existence checks to `SELECT EXISTS(SELECT 1 FROM ... WHERE ... LIMIT 1)` in:

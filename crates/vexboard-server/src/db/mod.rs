@@ -1,5 +1,6 @@
 pub mod audit;
 pub mod models;
+pub mod users;
 
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::SqlitePool;

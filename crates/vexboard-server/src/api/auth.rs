@@ -136,14 +136,7 @@ async fn login_local(
     payload: &LoginRequest,
     ip: &str,
 ) -> (StatusCode, Json<serde_json::Value>) {
-    let user = sqlx::query_as::<_, crate::db::models::User>(
-        "SELECT id, username, password_hash, role, created_at FROM users WHERE username = ?",
-    )
-    .bind(&payload.username)
-    .fetch_optional(&state.db)
-    .await;
-
-    let user = match user {
+    let user = match db::users::get_user_by_username(&state.db, &payload.username).await {
         Ok(Some(u)) => u,
         Ok(None) => {
             let detail = serde_json::json!({"username": payload.username}).to_string();
@@ -349,13 +342,7 @@ pub(crate) async fn update_me(
         }
     };
 
-    let user = match sqlx::query_as::<_, crate::db::models::User>(
-        "SELECT id, username, password_hash, role, created_at FROM users WHERE username = ?",
-    )
-    .bind(&current_username)
-    .fetch_optional(&state.db)
-    .await
-    {
+    let user = match db::users::get_user_by_username(&state.db, &current_username).await {
         Ok(Some(u)) => u,
         Ok(None) => {
             return (
