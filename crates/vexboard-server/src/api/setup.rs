@@ -2,6 +2,7 @@ use axum::{extract::State, http::StatusCode, Json};
 use serde::Deserialize;
 use serde_json::json;
 
+use crate::db;
 use crate::AppState;
 
 #[derive(Deserialize)]
@@ -72,7 +73,19 @@ pub async fn create_admin(
         .execute(&state.db)
         .await
     {
-        Ok(_) => (StatusCode::OK, Json(json!({"status": "ok"}))),
+        Ok(_) => {
+            db::audit::insert(
+                &state.db,
+                &payload.username,
+                "setup.admin_created",
+                Some("user"),
+                None,
+                None,
+                None,
+            )
+            .await;
+            (StatusCode::OK, Json(json!({"status": "ok"})))
+        }
         Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"error": "Failed to create user"})),

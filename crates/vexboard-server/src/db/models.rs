@@ -123,6 +123,18 @@ pub struct CreateQuickLink {
     pub sort_order: Option<i64>,
 }
 
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct AuditEvent {
+    pub id: i64,
+    pub actor: String,
+    pub action: String,
+    pub resource_type: Option<String>,
+    pub resource_id: Option<i64>,
+    pub detail: Option<String>,
+    pub ip_addr: Option<String>,
+    pub created_at: Option<NaiveDateTime>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct UpdateQuickLink {
     pub title: Option<String>,

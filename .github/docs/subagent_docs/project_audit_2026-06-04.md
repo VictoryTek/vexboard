@@ -260,11 +260,8 @@ VexBoard is a well-architected, actively developed project with solid fundamenta
 **3. ✅ DONE (2026-06-05) — API rate limiting on the login endpoint**
 - `tower-governor` was not available in the local registry; implemented a zero-dependency sliding-window `LoginRateLimiter` in `crates/vexboard-server/src/rate_limit.rs` using `std::sync::Mutex<HashMap<IpAddr, VecDeque<Instant>>>`. IP extracted via `ConnectInfo<SocketAddr>` with `X-Forwarded-For` fallback. Rate limit (default 10 attempts / 60 s) is configurable in `config/default.toml`. Set `login_rate_limit_attempts = 0` to disable. Check runs before any DB or bcrypt work.
 
-**4. Audit log for sensitive operations**
-- **Problem:** No record of who created/deleted services, changed credentials, or triggered discovery. Compliance and incident investigation concern for shared deployments.
-- **Value:** Accountability and diagnostic capability.
-- **Complexity:** Medium — add `audit_log` table to migration, create `AuditEvent` model, insert records in state-mutating handlers.
-- **Builds on:** Existing `db/` layer (`sqlx`, `models.rs`), all CRUD handlers in `api/`.
+**4. ✅ DONE (2026-06-05) — Audit log for sensitive operations**
+- `audit_log` SQLite table in `002_audit_log.sql` with indexes on `created_at DESC` and `actor`. Fire-and-forget `db::audit::insert` helper. All mutating handlers (services, groups, quick-links, auth, discovery, setup) write audit records. `GET /api/v1/audit` paginated read endpoint added under `require_auth`.
 
 **5. OpenAPI / Swagger API documentation**
 - **Problem:** REST API has no machine-readable specification. External integration requires reading source code.

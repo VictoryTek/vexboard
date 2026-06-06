@@ -1,3 +1,4 @@
+pub mod audit;
 pub mod models;
 
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
@@ -33,6 +34,10 @@ async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
     // Run the init migration manually since we embed it
     let init_sql = include_str!("migrations/001_init.sql");
     sqlx::raw_sql(init_sql).execute(pool).await?;
+
+    // Audit log table (idempotent — uses IF NOT EXISTS)
+    let audit_sql = include_str!("migrations/002_audit_log.sql");
+    sqlx::raw_sql(audit_sql).execute(pool).await?;
 
     // Backfill for existing databases created before discovery_source existed.
     let has_discovery_source: i64 = sqlx::query_scalar(

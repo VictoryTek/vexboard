@@ -7,8 +7,10 @@ use axum::{
 };
 use serde_json::json;
 
+use crate::db;
 use crate::db::models::{CreateQuickLink, QuickLink, UpdateQuickLink};
 use crate::AppState;
+use tower_sessions::Session;
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -36,6 +38,7 @@ async fn list_quick_links(State(state): State<AppState>) -> impl IntoResponse {
 
 async fn create_quick_link(
     State(state): State<AppState>,
+    session: Session,
     Json(payload): Json<CreateQuickLink>,
 ) -> impl IntoResponse {
     match sqlx::query(
@@ -49,7 +52,12 @@ async fn create_quick_link(
     .execute(&state.db)
     .await
     {
-        Ok(r) => (StatusCode::CREATED, Json(json!({"id": r.last_insert_rowid()}))),
+        Ok(r) => {
+            let actor = session.get::<String>("username").await.ok().flatten().unwrap_or_else(|| "unknown".to_string());
+            let detail = serde_json::json!({"title": payload.title}).to_string();
+            db::audit::insert(&state.db, &actor, "quick_link.create", Some("quick_link"), Some(r.last_insert_rowid()), Some(&detail), None).await;
+            (StatusCode::CREATED, Json(json!({"id": r.last_insert_rowid()})))
+        }
         Err(e) => {
             tracing::error!("Failed to create quick link: {e}");
             (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to create quick link"})))
@@ -59,6 +67,7 @@ async fn create_quick_link(
 
 async fn update_quick_link(
     State(state): State<AppState>,
+    session: Session,
     Path(id): Path<i64>,
     Json(payload): Json<UpdateQuickLink>,
 ) -> impl IntoResponse {
@@ -106,7 +115,25 @@ async fn update_quick_link(
     .execute(&state.db)
     .await
     {
-        Ok(_) => (StatusCode::OK, Json(json!({"status": "updated"}))),
+        Ok(_) => {
+            let actor = session
+                .get::<String>("username")
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "unknown".to_string());
+            db::audit::insert(
+                &state.db,
+                &actor,
+                "quick_link.update",
+                Some("quick_link"),
+                Some(id),
+                None,
+                None,
+            )
+            .await;
+            (StatusCode::OK, Json(json!({"status": "updated"})))
+        }
         Err(e) => {
             tracing::error!("Failed to update quick link: {e}");
             (
@@ -119,6 +146,7 @@ async fn update_quick_link(
 
 async fn delete_quick_link(
     State(state): State<AppState>,
+    session: Session,
     Path(id): Path<i64>,
 ) -> impl IntoResponse {
     match sqlx::query("DELETE FROM quick_links WHERE id = ?")
@@ -126,7 +154,25 @@ async fn delete_quick_link(
         .execute(&state.db)
         .await
     {
-        Ok(r) if r.rows_affected() > 0 => (StatusCode::OK, Json(json!({"status": "deleted"}))),
+        Ok(r) if r.rows_affected() > 0 => {
+            let actor = session
+                .get::<String>("username")
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "unknown".to_string());
+            db::audit::insert(
+                &state.db,
+                &actor,
+                "quick_link.delete",
+                Some("quick_link"),
+                Some(id),
+                None,
+                None,
+            )
+            .await;
+            (StatusCode::OK, Json(json!({"status": "deleted"})))
+        }
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Not found"}))),
         Err(e) => {
             tracing::error!("Failed to delete quick link: {e}");

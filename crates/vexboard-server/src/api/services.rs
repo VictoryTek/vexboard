@@ -9,8 +9,10 @@ use axum::{
 };
 use serde_json::json;
 
+use crate::db;
 use crate::db::models::{CreateService, Service, ServiceWithStatus, UpdateService};
 use crate::AppState;
+use tower_sessions::Session;
 
 #[derive(sqlx::FromRow)]
 struct LatestProbe {
@@ -79,9 +81,10 @@ async fn list_services(State(state): State<AppState>) -> impl IntoResponse {
     (StatusCode::OK, Json(json!(result)))
 }
 
-#[tracing::instrument(skip(state))]
+#[tracing::instrument(skip(state, session))]
 async fn create_service(
     State(state): State<AppState>,
+    session: Session,
     Json(payload): Json<CreateService>,
 ) -> impl IntoResponse {
     let tags_json = payload
@@ -109,10 +112,29 @@ async fn create_service(
     .await;
 
     match result {
-        Ok(r) => (
-            StatusCode::CREATED,
-            Json(json!({"id": r.last_insert_rowid()})),
-        ),
+        Ok(r) => {
+            let actor = session
+                .get::<String>("username")
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "unknown".to_string());
+            let detail = serde_json::json!({"display_name": payload.display_name}).to_string();
+            db::audit::insert(
+                &state.db,
+                &actor,
+                "service.create",
+                Some("service"),
+                Some(r.last_insert_rowid()),
+                Some(&detail),
+                None,
+            )
+            .await;
+            (
+                StatusCode::CREATED,
+                Json(json!({"id": r.last_insert_rowid()})),
+            )
+        }
         Err(e) => {
             tracing::error!("Failed to create service: {e}");
             (
@@ -123,9 +145,10 @@ async fn create_service(
     }
 }
 
-#[tracing::instrument(skip(state))]
+#[tracing::instrument(skip(state, session))]
 async fn update_service(
     State(state): State<AppState>,
+    session: Session,
     Path(id): Path<i64>,
     Json(payload): Json<UpdateService>,
 ) -> impl IntoResponse {
@@ -203,7 +226,25 @@ async fn update_service(
     .await;
 
     match result {
-        Ok(_) => (StatusCode::OK, Json(json!({"status": "updated"}))),
+        Ok(_) => {
+            let actor = session
+                .get::<String>("username")
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "unknown".to_string());
+            db::audit::insert(
+                &state.db,
+                &actor,
+                "service.update",
+                Some("service"),
+                Some(id),
+                None,
+                None,
+            )
+            .await;
+            (StatusCode::OK, Json(json!({"status": "updated"})))
+        }
         Err(e) => {
             tracing::error!("Failed to update service: {e}");
             (
@@ -214,15 +255,37 @@ async fn update_service(
     }
 }
 
-#[tracing::instrument(skip(state))]
-async fn delete_service(State(state): State<AppState>, Path(id): Path<i64>) -> impl IntoResponse {
+#[tracing::instrument(skip(state, session))]
+async fn delete_service(
+    State(state): State<AppState>,
+    session: Session,
+    Path(id): Path<i64>,
+) -> impl IntoResponse {
     let result = sqlx::query("DELETE FROM services WHERE id = ?")
         .bind(id)
         .execute(&state.db)
         .await;
 
     match result {
-        Ok(r) if r.rows_affected() > 0 => (StatusCode::OK, Json(json!({"status": "deleted"}))),
+        Ok(r) if r.rows_affected() > 0 => {
+            let actor = session
+                .get::<String>("username")
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "unknown".to_string());
+            db::audit::insert(
+                &state.db,
+                &actor,
+                "service.delete",
+                Some("service"),
+                Some(id),
+                None,
+                None,
+            )
+            .await;
+            (StatusCode::OK, Json(json!({"status": "deleted"})))
+        }
         Ok(_) => (
             StatusCode::NOT_FOUND,
             Json(json!({"error": "Service not found"})),
@@ -238,9 +301,10 @@ async fn delete_service(State(state): State<AppState>, Path(id): Path<i64>) -> i
 }
 
 /// Claim a discovered systemd unit — copies it into the services table with user-provided metadata.
-#[tracing::instrument(skip(state))]
+#[tracing::instrument(skip(state, session))]
 async fn claim_service(
     State(state): State<AppState>,
+    session: Session,
     Path(id): Path<i64>,
     Json(payload): Json<CreateService>,
 ) -> axum::response::Response {
@@ -261,8 +325,8 @@ async fn claim_service(
         }
     }
 
-    // Reuse create logic
-    create_service(State(state), Json(payload))
+    // Reuse create logic (also writes service.create audit entry)
+    create_service(State(state), session, Json(payload))
         .await
         .into_response()
 }

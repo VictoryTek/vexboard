@@ -1,3 +1,4 @@
+pub mod audit;
 pub mod auth;
 pub mod groups;
 pub mod health;
@@ -36,6 +37,7 @@ pub fn router() -> Router<AppState> {
         .nest("/api/v1/quick-links", quick_links::router())
         .nest("/api/v1/metrics", metrics::router())
         .nest("/api/v1/discovery", crate::discovery::router())
+        .nest("/api/v1/audit", audit::router())
         .route_layer(middleware::from_fn(require_auth));
 
     // Public routes: setup bootstrap, auth, and health check.

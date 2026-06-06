@@ -13,7 +13,9 @@ use serde_json::json;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+use crate::db;
 use crate::AppState;
+use tower_sessions::Session;
 
 /// A discovered unit (systemd service or container) not yet claimed by the user.
 #[derive(Debug, Clone, Serialize)]
@@ -48,8 +50,8 @@ async fn list_discovered(State(state): State<AppState>) -> impl IntoResponse {
 }
 
 /// Trigger an immediate re-scan of systemd units.
-#[tracing::instrument(skip(state))]
-async fn trigger_refresh(State(state): State<AppState>) -> impl IntoResponse {
+#[tracing::instrument(skip(state, session))]
+async fn trigger_refresh(State(state): State<AppState>, session: Session) -> impl IntoResponse {
     // Spawn a systemd refresh in the background
     let discoveries = state.discoveries.clone();
     let db = state.db.clone();
@@ -68,6 +70,22 @@ async fn trigger_refresh(State(state): State<AppState>) -> impl IntoResponse {
             tracing::error!("container discovery refresh failed: {e}");
         }
     });
+    let actor = session
+        .get::<String>("username")
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "unknown".to_string());
+    db::audit::insert(
+        &state.db,
+        &actor,
+        "discovery.refresh",
+        None,
+        None,
+        None,
+        None,
+    )
+    .await;
     (
         StatusCode::ACCEPTED,
         Json(json!({"status": "refresh triggered"})),

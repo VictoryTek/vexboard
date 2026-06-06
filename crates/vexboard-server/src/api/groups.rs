@@ -7,8 +7,10 @@ use axum::{
 };
 use serde_json::json;
 
+use crate::db;
 use crate::db::models::{CreateGroup, Group, UpdateGroup};
 use crate::AppState;
+use tower_sessions::Session;
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -36,9 +38,10 @@ async fn list_groups(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
-#[tracing::instrument(skip(state))]
+#[tracing::instrument(skip(state, session))]
 async fn create_group(
     State(state): State<AppState>,
+    session: Session,
     Json(payload): Json<CreateGroup>,
 ) -> impl IntoResponse {
     let result = sqlx::query("INSERT INTO groups (name, icon, sort_order) VALUES (?, ?, ?)")
@@ -49,10 +52,29 @@ async fn create_group(
         .await;
 
     match result {
-        Ok(r) => (
-            StatusCode::CREATED,
-            Json(json!({"id": r.last_insert_rowid()})),
-        ),
+        Ok(r) => {
+            let actor = session
+                .get::<String>("username")
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "unknown".to_string());
+            let detail = serde_json::json!({"name": payload.name}).to_string();
+            db::audit::insert(
+                &state.db,
+                &actor,
+                "group.create",
+                Some("group"),
+                Some(r.last_insert_rowid()),
+                Some(&detail),
+                None,
+            )
+            .await;
+            (
+                StatusCode::CREATED,
+                Json(json!({"id": r.last_insert_rowid()})),
+            )
+        }
         Err(e) => {
             tracing::error!("Failed to create group: {e}");
             (
@@ -63,9 +85,10 @@ async fn create_group(
     }
 }
 
-#[tracing::instrument(skip(state))]
+#[tracing::instrument(skip(state, session))]
 async fn update_group(
     State(state): State<AppState>,
+    session: Session,
     Path(id): Path<i64>,
     Json(payload): Json<UpdateGroup>,
 ) -> impl IntoResponse {
@@ -106,7 +129,25 @@ async fn update_group(
         .await;
 
     match result {
-        Ok(_) => (StatusCode::OK, Json(json!({"status": "updated"}))),
+        Ok(_) => {
+            let actor = session
+                .get::<String>("username")
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "unknown".to_string());
+            db::audit::insert(
+                &state.db,
+                &actor,
+                "group.update",
+                Some("group"),
+                Some(id),
+                None,
+                None,
+            )
+            .await;
+            (StatusCode::OK, Json(json!({"status": "updated"})))
+        }
         Err(e) => {
             tracing::error!("Failed to update group: {e}");
             (
@@ -117,15 +158,37 @@ async fn update_group(
     }
 }
 
-#[tracing::instrument(skip(state))]
-async fn delete_group(State(state): State<AppState>, Path(id): Path<i64>) -> impl IntoResponse {
+#[tracing::instrument(skip(state, session))]
+async fn delete_group(
+    State(state): State<AppState>,
+    session: Session,
+    Path(id): Path<i64>,
+) -> impl IntoResponse {
     let result = sqlx::query("DELETE FROM groups WHERE id = ?")
         .bind(id)
         .execute(&state.db)
         .await;
 
     match result {
-        Ok(r) if r.rows_affected() > 0 => (StatusCode::OK, Json(json!({"status": "deleted"}))),
+        Ok(r) if r.rows_affected() > 0 => {
+            let actor = session
+                .get::<String>("username")
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "unknown".to_string());
+            db::audit::insert(
+                &state.db,
+                &actor,
+                "group.delete",
+                Some("group"),
+                Some(id),
+                None,
+                None,
+            )
+            .await;
+            (StatusCode::OK, Json(json!({"status": "deleted"})))
+        }
         Ok(_) => (
             StatusCode::NOT_FOUND,
             Json(json!({"error": "Group not found"})),
