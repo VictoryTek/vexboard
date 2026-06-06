@@ -9,51 +9,12 @@ pub mod services;
 pub mod setup;
 pub mod users;
 
+use crate::middleware::auth::{require_admin, require_auth};
 use crate::AppState;
-use axum::extract::Request;
-use axum::http::StatusCode;
-use axum::middleware::{self, Next};
-use axum::response::IntoResponse;
-use axum::{Json, Router};
-use serde_json::json;
-use tower_sessions::Session;
+use axum::middleware;
+use axum::Router;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
-
-/// Middleware that rejects unauthenticated requests with 401.
-async fn require_auth(session: Session, request: Request, next: Next) -> impl IntoResponse {
-    match session.get::<String>("username").await {
-        Ok(Some(_)) => next.run(request).await.into_response(),
-        _ => (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "Not authenticated"})),
-        )
-            .into_response(),
-    }
-}
-
-/// Middleware that requires an active session with the `admin` role.
-/// Returns 401 if not authenticated, 403 if authenticated but not admin.
-async fn require_admin(session: Session, request: Request, next: Next) -> impl IntoResponse {
-    match session.get::<String>("username").await {
-        Ok(Some(_)) => {}
-        _ => {
-            return (
-                StatusCode::UNAUTHORIZED,
-                Json(json!({"error": "Not authenticated"})),
-            )
-                .into_response()
-        }
-    }
-    match session.get::<String>("role").await {
-        Ok(Some(ref r)) if r == "admin" => next.run(request).await.into_response(),
-        _ => (
-            StatusCode::FORBIDDEN,
-            Json(json!({"error": "Admin role required"})),
-        )
-            .into_response(),
-    }
-}
 
 /// Build the complete API router under `/api/v1`.
 pub fn router() -> Router<AppState> {

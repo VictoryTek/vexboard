@@ -3,6 +3,7 @@ mod config;
 mod db;
 mod discovery;
 mod metrics;
+mod middleware;
 mod notify;
 mod probe;
 mod rate_limit;

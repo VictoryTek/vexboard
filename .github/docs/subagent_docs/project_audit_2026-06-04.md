@@ -285,10 +285,8 @@ VexBoard is a well-architected, actively developed project with solid fundamenta
 
 ### 2.3 Refactoring Opportunities
 
-**1. Extract authentication middleware into its own module**
-- **What:** Create `crates/vexboard-server/src/middleware/auth.rs` with a reusable session-check layer, applied at the router level.
-- **Why:** Centralizes the authorization boundary — future endpoints are protected by default, and policy changes require edits in one place instead of every handler.
-- **Risk:** Low — purely additive; existing handler signatures are unaffected.
+**1. ✅ DONE (2026-06-06) — Extract authentication middleware into its own module**
+- `crates/vexboard-server/src/middleware/auth.rs` created with `pub async fn require_auth` and `pub async fn require_admin`. `api/mod.rs` reduced to a clean router aggregator — all auth logic centralized in the new module.
 
 **2. Consolidate feature-gated auth handler duplication**
 - **What:** Replace the four pairs of `#[cfg(feature = "pam-auth")]` / `#[cfg(not(feature = "pam-auth"))]` function definitions in `crates/vexboard-server/src/api/auth.rs` with a single handler calling into an internal abstraction.
