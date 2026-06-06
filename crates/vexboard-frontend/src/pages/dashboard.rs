@@ -10,7 +10,7 @@ use crate::components::service_card::{ServiceCard, ServiceData};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum SortMode {
-    Default,
+    AZ,
     Source,
     Group,
 }
@@ -71,7 +71,7 @@ pub fn DashboardPage() -> impl IntoView {
     let (show_modal, set_show_modal) = signal(false);
     let (show_add_menu, set_show_add_menu) = signal(false);
     let (show_groups_modal, set_show_groups_modal) = signal(false);
-    let (sort_mode, set_sort_mode) = signal(SortMode::Default);
+    let (sort_mode, set_sort_mode) = signal(SortMode::AZ);
 
     let drag_src_idx: RwSignal<Option<usize>> = RwSignal::new(None);
     let drag_over_idx: RwSignal<Option<usize>> = RwSignal::new(None);
@@ -214,9 +214,9 @@ pub fn DashboardPage() -> impl IntoView {
                                 background:var(--color-bg-surface); border:1px solid var(--color-border); \
                                 border-radius:0.5rem; padding:0.2rem;">
                         {[
-                            (SortMode::Default, "Default"),
-                            (SortMode::Source,  "Source"),
-                            (SortMode::Group,   "Group"),
+                            (SortMode::AZ,     "A-Z"),
+                            (SortMode::Source, "Source"),
+                            (SortMode::Group,  "Group"),
                         ].map(|(mode, label)| view! {
                             <button
                                 style=move || {
@@ -505,6 +505,8 @@ pub fn DashboardPage() -> impl IntoView {
                         }).collect_view();
                         EitherOf4::C(view! { <div>{sections}</div> })
                     } else {
+                        let mut svcs = svcs;
+                        svcs.sort_by(|a, b| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase()));
                         let svcs_with_idx: Vec<(usize, ServiceResponse)> =
                             svcs.into_iter().enumerate().collect();
                         let cards = svcs_with_idx.into_iter().map(|(idx, svc)| {
