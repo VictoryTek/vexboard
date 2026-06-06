@@ -263,23 +263,14 @@ VexBoard is a well-architected, actively developed project with solid fundamenta
 **4. ✅ DONE (2026-06-05) — Audit log for sensitive operations**
 - `audit_log` SQLite table in `002_audit_log.sql` with indexes on `created_at DESC` and `actor`. Fire-and-forget `db::audit::insert` helper. All mutating handlers (services, groups, quick-links, auth, discovery, setup) write audit records. `GET /api/v1/audit` paginated read endpoint added under `require_auth`.
 
-**5. OpenAPI / Swagger API documentation**
-- **Problem:** REST API has no machine-readable specification. External integration requires reading source code.
-- **Value:** Enables third-party integrations, simplifies testing, provides a canonical API contract.
-- **Complexity:** Medium — `utoipa` crate generates OpenAPI 3.x specs from handler annotations; `utoipa-swagger-ui` serves the browser UI.
-- **Builds on:** All files in `crates/vexboard-server/src/api/`.
+**5. ✅ DONE (2026-06-05) — OpenAPI / Swagger API documentation**
+- `utoipa` annotations added to all API handlers; `utoipa-swagger-ui` serves the browser UI at `/swagger-ui`. Commit: `feat(api): OpenAPI 3.x spec and Swagger UI via utoipa`.
 
-**6. Service grouping in the UI**
-- **Problem:** The `groups` table and full CRUD API exist; `group_id` is a field on services; but `EditFormData.group_id` in the frontend is dead code. Users cannot assign services to groups via the UI.
-- **Value:** Completes a partially-built feature that enables logical organization of large service lists.
-- **Complexity:** Low-Medium — backend is fully implemented; only the frontend modal and dashboard rendering need updating.
-- **Builds on:** `crates/vexboard-frontend/src/components/modal_edit.rs:26`, `crates/vexboard-server/src/api/groups.rs`, existing `groups` DB table.
+**6. ✅ DONE (2026-06-05) — Service grouping in the UI**
+- Frontend modal now includes group selector; dashboard renders services grouped; discovery panel supports group assignment. Commits: `feat(groups): group management UI and discovery panel group assignment`, `feat(ui): wire service group selector and Group sort mode to dashboard`.
 
-**7. Webhook / notification support for probe state changes**
-- **Problem:** When a service goes down, there is no mechanism to alert an operator outside the dashboard.
-- **Value:** Makes VexBoard useful for on-call workflows, not just passive monitoring.
-- **Complexity:** Medium — add `[notifications]` config section, implement a webhook sender triggered from the probe broadcast receiver.
-- **Builds on:** `crates/vexboard-server/src/probe/`, `reqwest` (already a dependency), `config.rs`.
+**7. ✅ DONE (2026-06-05) — Webhook / notification support for probe state changes**
+- `[notifications]` config section added; webhook sender fires on probe state transitions. Commit: `feat(notify): webhook delivery on probe state transitions`.
 
 **8. Dashboard drag-to-reorder services**
 - **Problem:** `sort_order` columns exist on `services` and `groups` tables but there is no drag-and-drop UI on the dashboard.

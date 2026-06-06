@@ -144,3 +144,9 @@ pub struct UpdateQuickLink {
     pub description: Option<String>,
     pub sort_order: Option<i64>,
 }
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct ReorderItem {
+    pub id: i64,
+    pub sort_order: i64,
+}

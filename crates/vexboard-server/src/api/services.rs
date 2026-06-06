@@ -4,13 +4,13 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, post, put},
+    routing::{get, patch, post, put},
     Json, Router,
 };
 use serde_json::json;
 
 use crate::db;
-use crate::db::models::{CreateService, Service, ServiceWithStatus, UpdateService};
+use crate::db::models::{CreateService, ReorderItem, Service, ServiceWithStatus, UpdateService};
 use crate::AppState;
 use tower_sessions::Session;
 
@@ -23,6 +23,7 @@ struct LatestProbe {
 
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route("/reorder", patch(reorder_services))
         .route("/", get(list_services).post(create_service))
         .route("/{id}", put(update_service).delete(delete_service))
         .route("/{id}/claim", post(claim_service))
@@ -352,6 +353,92 @@ pub(crate) async fn delete_service(
             )
         }
     }
+}
+
+#[utoipa::path(
+    patch,
+    path = "/api/v1/services/reorder",
+    tag = "services",
+    security(("cookieAuth" = [])),
+    request_body = Vec<ReorderItem>,
+    responses(
+        (status = 200, description = "Sort orders updated"),
+        (status = 400, description = "Empty reorder list"),
+        (status = 401, description = "Not authenticated"),
+        (status = 500, description = "Database error"),
+    )
+)]
+#[tracing::instrument(skip(state, session))]
+pub(crate) async fn reorder_services(
+    State(state): State<AppState>,
+    session: Session,
+    Json(items): Json<Vec<ReorderItem>>,
+) -> impl IntoResponse {
+    if items.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "Reorder list is empty"})),
+        );
+    }
+
+    let mut tx = match state.db.begin().await {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::error!("Failed to begin transaction: {e}");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Database error"})),
+            );
+        }
+    };
+
+    for item in &items {
+        if let Err(e) = sqlx::query(
+            "UPDATE services SET sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        )
+        .bind(item.sort_order)
+        .bind(item.id)
+        .execute(&mut *tx)
+        .await
+        {
+            tracing::error!("Failed to update sort_order for service {}: {e}", item.id);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Database error"})),
+            );
+        }
+    }
+
+    if let Err(e) = tx.commit().await {
+        tracing::error!("Failed to commit reorder transaction: {e}");
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": "Database error"})),
+        );
+    }
+
+    let actor = session
+        .get::<String>("username")
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "unknown".to_string());
+    let detail = serde_json::json!({"count": items.len()}).to_string();
+    db::audit::insert(
+        &state.db,
+        &actor,
+        "service.reorder",
+        Some("service"),
+        None,
+        Some(&detail),
+        None,
+    )
+    .await;
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({"status": "reordered"})),
+    )
 }
 
 /// Claim a discovered systemd unit — copies it into the services table with user-provided metadata.

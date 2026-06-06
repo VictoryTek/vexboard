@@ -25,6 +25,7 @@ struct ServiceResponse {
     url: Option<String>,
     icon: Option<String>,
     group_id: Option<i64>,
+    sort_order: i64,
     status: String,
     latency_ms: Option<i64>,
     probe_enabled: bool,
@@ -71,6 +72,9 @@ pub fn DashboardPage() -> impl IntoView {
     let (show_add_menu, set_show_add_menu) = signal(false);
     let (show_groups_modal, set_show_groups_modal) = signal(false);
     let (sort_mode, set_sort_mode) = signal(SortMode::Default);
+
+    let drag_src_idx: RwSignal<Option<usize>> = RwSignal::new(None);
+    let drag_over_idx: RwSignal<Option<usize>> = RwSignal::new(None);
 
     // Edit targets
     let edit_target: RwSignal<Option<(i64, EditFormData)>> = RwSignal::new(None);
@@ -501,9 +505,67 @@ pub fn DashboardPage() -> impl IntoView {
                         }).collect_view();
                         EitherOf4::C(view! { <div>{sections}</div> })
                     } else {
+                        let svcs_with_idx: Vec<(usize, ServiceResponse)> =
+                            svcs.into_iter().enumerate().collect();
+                        let cards = svcs_with_idx.into_iter().map(|(idx, svc)| {
+                            let card = render_card(svc);
+                            view! {
+                                <div
+                                    draggable="true"
+                                    style=move || {
+                                        let is_over = drag_over_idx.get() == Some(idx);
+                                        let is_dragging = drag_src_idx.get() == Some(idx);
+                                        let mut s = "cursor:grab;".to_string();
+                                        if is_dragging { s.push_str("opacity:0.45;"); }
+                                        if is_over { s.push_str("outline:2px solid var(--color-accent);border-radius:12px;"); }
+                                        s
+                                    }
+                                    on:dragstart=move |_| drag_src_idx.set(Some(idx))
+                                    on:dragover=move |ev| {
+                                        ev.prevent_default();
+                                        drag_over_idx.set(Some(idx));
+                                    }
+                                    on:dragleave=move |_| {
+                                        if drag_over_idx.get() == Some(idx) {
+                                            drag_over_idx.set(None);
+                                        }
+                                    }
+                                    on:drop=move |ev| {
+                                        ev.prevent_default();
+                                        let src = drag_src_idx.get();
+                                        let dst = drag_over_idx.get();
+                                        drag_src_idx.set(None);
+                                        drag_over_idx.set(None);
+                                        if let (Some(src_i), Some(dst_i)) = (src, dst) {
+                                            if src_i != dst_i {
+                                                spawn_local(async move {
+                                                    // Fetch current list, move item, then PATCH
+                                                    if let Ok(mut current) = fetch_services().await {
+                                                        let item = current.remove(src_i);
+                                                        current.insert(dst_i, item);
+                                                        let payload: Vec<_> = current.iter()
+                                                            .enumerate()
+                                                            .map(|(i, s)| (s.id, i as i64))
+                                                            .collect();
+                                                        let _ = reorder_services(payload).await;
+                                                        services.refetch();
+                                                    }
+                                                });
+                                            }
+                                        }
+                                    }
+                                    on:dragend=move |_| {
+                                        drag_src_idx.set(None);
+                                        drag_over_idx.set(None);
+                                    }
+                                >
+                                    {card}
+                                </div>
+                            }
+                        }).collect_view();
                         EitherOf4::D(view! {
                             <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,360px)); gap:1rem; justify-content:start;">
-                                {svcs.into_iter().map(render_card).collect_view()}
+                                {cards}
                             </div>
                         })
                     }
@@ -580,4 +642,16 @@ async fn fetch_quick_links() -> Result<Vec<QuickLinkResponse>, gloo_net::Error> 
         .send()
         .await?;
     resp.json().await
+}
+
+async fn reorder_services(items: Vec<(i64, i64)>) -> Result<(), gloo_net::Error> {
+    let body: Vec<_> = items
+        .iter()
+        .map(|(id, so)| serde_json::json!({"id": id, "sort_order": so}))
+        .collect();
+    gloo_net::http::Request::patch("/api/v1/services/reorder")
+        .json(&body)?
+        .send()
+        .await?;
+    Ok(())
 }
