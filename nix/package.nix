@@ -1,4 +1,5 @@
-{ lib, stdenv, rustPlatform, rustToolchain, pkg-config, openssl, dbus, linux-pam, trunk, wasm-bindgen-cli }:
+{ lib, stdenv, rustPlatform, rustToolchain, pkg-config, openssl, dbus, linux-pam
+, trunk, wasmBindgenCli, binaryen }:
 
 let
   src = lib.cleanSource ./..;
@@ -15,7 +16,8 @@ rustPlatform.buildRustPackage {
   nativeBuildInputs = [
     pkg-config
     trunk
-    wasm-bindgen-cli
+    wasmBindgenCli
+    binaryen        # provides wasm-opt; prevents trunk from downloading it (no network in sandbox)
   ];
 
   buildInputs = [
@@ -24,14 +26,19 @@ rustPlatform.buildRustPackage {
     linux-pam
   ];
 
-  # Build frontend first, then backend
   buildPhase = ''
+    # Trunk writes cache/config files; give it a writable home in the sandbox.
+    export HOME=$(mktemp -d)
+
+    # Tell trunk to use the system wasm-opt (from binaryen) rather than downloading its own copy.
+    export TRUNK_TOOLS_WASM_OPT_VERSION=skip
+
     # Build WASM frontend
     cd crates/vexboard-frontend
     trunk build --release
     cd ../..
 
-    # Build backend
+    # Build backend (pam-auth is Linux-only; meta.platforms enforces this)
     cargo build --release --bin vexboard-server --features pam-auth
   '';
 

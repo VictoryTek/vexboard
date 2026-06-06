@@ -19,10 +19,37 @@
           extensions = [ "rust-src" ];
           targets = [ "wasm32-unknown-unknown" ];
         };
+
+        # Pin wasm-bindgen-cli to match the version in Cargo.lock (0.2.121).
+        # Trunk enforces a hard version match between the CLI binary and the
+        # wasm-bindgen crate; a mismatch aborts the build.
+        #
+        # HOW TO GET THE HASHES:
+        #   Run `nix build` once — it will fail with "got: sha256-..." for each
+        #   fakeHash below. Replace the placeholders with the values from those
+        #   error messages, then re-run `nix build`.
+        wasmBindgenCli = pkgs.rustPlatform.buildRustPackage rec {
+          pname = "wasm-bindgen-cli";
+          version = "0.2.121";
+
+          src = pkgs.fetchCrate {
+            inherit pname version;
+            hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+          };
+
+          cargoHash = "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=";
+
+          nativeBuildInputs = [ pkgs.pkg-config ];
+          buildInputs = pkgs.lib.optionals pkgs.stdenv.isDarwin [
+            pkgs.darwin.apple_sdk.frameworks.Security
+          ];
+
+          doCheck = false;
+        };
       in
       {
         packages.vexboard = pkgs.callPackage ./nix/package.nix {
-          inherit rustToolchain;
+          inherit rustToolchain wasmBindgenCli;
         };
         packages.default = self.packages.${system}.vexboard;
 
@@ -33,7 +60,9 @@
             openssl
             sqlx-cli
             trunk
-            nodePackages.tailwindcss
+            wasmBindgenCli
+            binaryen
+            tailwindcss
             dbus
           ];
 
