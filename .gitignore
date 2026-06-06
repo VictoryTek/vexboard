@@ -6,6 +6,9 @@ target/
 *.db-shm
 *.db-wal
 
+# Local dev-data directory (created by docker-compose.override.yml)
+dev-data/
+
 # Frontend build output
 dist/
 crates/vexboard-frontend/dist/
