@@ -60,12 +60,27 @@ pub async fn discover_containers(
     Ok(())
 }
 
+/// Returns the host to use in URL hints for containers reached via `socket`.
+/// Unix socket paths → "localhost"; TCP/HTTP URLs → the hostname segment.
+fn socket_host(socket: &str) -> &str {
+    if socket.starts_with('/') {
+        return "localhost";
+    }
+    // Strip scheme prefix and take the host portion before any colon.
+    let after_scheme = socket
+        .strip_prefix("tcp://")
+        .or_else(|| socket.strip_prefix("http://"))
+        .unwrap_or(socket);
+    after_scheme.split(':').next().unwrap_or("localhost")
+}
+
 async fn discover_from_socket(
     socket: &str,
     source: &str,
     db: &SqlitePool,
     exclude_images: &[String],
 ) -> anyhow::Result<Vec<DiscoveredUnit>> {
+    let host = socket_host(socket);
     let docker = Docker::connect_with_socket(socket, 10, bollard::API_DEFAULT_VERSION)?;
 
     // Quick connectivity check
@@ -126,13 +141,25 @@ async fn discover_from_socket(
             continue;
         }
 
-        // Find first mapped public port for URL hint
-        let url_hint = c
-            .ports
-            .as_ref()
-            .and_then(|ports| ports.iter().find(|p| p.public_port.is_some()))
-            .and_then(|p| p.public_port)
-            .map(|port| format!("http://localhost:{port}"));
+        // Find first mapped public port for URL hint.
+        // Prefer the port's bound IP when it's a specific address; fall back
+        // to the host derived from the socket (localhost for Unix sockets,
+        // the remote hostname for TCP endpoints).
+        let url_hint = c.ports.as_ref().and_then(|ports| {
+            ports
+                .iter()
+                .find(|p| p.public_port.is_some())
+                .and_then(|p| {
+                    let port = p.public_port?;
+                    let bound = p.ip.as_deref().unwrap_or("");
+                    let h = if bound.is_empty() || bound == "0.0.0.0" || bound == "::" {
+                        host
+                    } else {
+                        bound
+                    };
+                    Some(format!("http://{h}:{port}"))
+                })
+        });
 
         units.push(DiscoveredUnit {
             unit_name: name,
