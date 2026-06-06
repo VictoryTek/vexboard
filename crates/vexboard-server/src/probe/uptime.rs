@@ -1,10 +1,35 @@
 use std::time::{Duration, Instant};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tokio::sync::broadcast;
+use zbus::zvariant;
 
 use crate::db::models::Service;
+
+#[zbus::proxy(
+    interface = "org.freedesktop.systemd1.Manager",
+    default_service = "org.freedesktop.systemd1",
+    default_path = "/org/freedesktop/systemd1"
+)]
+trait SystemdManager {
+    fn list_units(&self) -> zbus::Result<Vec<SystemdUnitInfo>>;
+}
+
+#[derive(Debug, zvariant::Type, Deserialize)]
+#[allow(dead_code)]
+struct SystemdUnitInfo {
+    name: String,
+    description: String,
+    load_state: String,
+    active_state: String,
+    sub_state: String,
+    followed: String,
+    object_path: zvariant::OwnedObjectPath,
+    queued_job_id: u32,
+    job_type: String,
+    job_object_path: zvariant::OwnedObjectPath,
+}
 
 /// Event emitted when a probe completes.
 #[derive(Debug, Clone, Serialize)]
@@ -102,4 +127,80 @@ pub async fn probe_service(
     if let Err(e) = tx.send(event) {
         tracing::debug!("no active probe subscribers: {e}");
     }
+}
+
+/// Probe a systemd unit's active state via D-Bus and record the result.
+#[tracing::instrument(skip(db, tx), fields(service_id = svc.id, unit = ?svc.systemd_unit))]
+pub async fn probe_systemd_unit(
+    db: &SqlitePool,
+    svc: &Service,
+    max_history: u64,
+    tx: &broadcast::Sender<ProbeEvent>,
+) {
+    let unit_name = match &svc.systemd_unit {
+        Some(u) if !u.is_empty() => u.clone(),
+        _ => return,
+    };
+
+    let status = match unit_active_state(&unit_name).await {
+        Ok(state) => match state.as_str() {
+            "active" | "reloading" | "activating" => "up".to_string(),
+            _ => "down".to_string(),
+        },
+        Err(e) => {
+            tracing::warn!(unit = %unit_name, "D-Bus unit state query failed: {e}");
+            "down".to_string()
+        }
+    };
+
+    if let Err(e) =
+        sqlx::query("INSERT INTO probe_results (service_id, status, latency_ms) VALUES (?, ?, ?)")
+            .bind(svc.id)
+            .bind(&status)
+            .bind(None::<i64>)
+            .execute(db)
+            .await
+    {
+        tracing::error!(
+            "failed to record systemd probe result for service {}: {e}",
+            svc.id
+        );
+    }
+
+    if let Err(e) = sqlx::query(
+        "DELETE FROM probe_results WHERE service_id = ? AND id NOT IN \
+         (SELECT id FROM probe_results WHERE service_id = ? ORDER BY checked_at DESC LIMIT ?)",
+    )
+    .bind(svc.id)
+    .bind(svc.id)
+    .bind(max_history as i64)
+    .execute(db)
+    .await
+    {
+        tracing::warn!("failed to trim probe history for service {}: {e}", svc.id);
+    }
+
+    let event = ProbeEvent {
+        service_id: svc.id,
+        service_name: svc.display_name.clone(),
+        url: None,
+        status,
+        latency_ms: None,
+    };
+    if let Err(e) = tx.send(event) {
+        tracing::debug!("no active probe subscribers: {e}");
+    }
+}
+
+async fn unit_active_state(unit_name: &str) -> anyhow::Result<String> {
+    let conn = zbus::Connection::system().await?;
+    let proxy = SystemdManagerProxy::new(&conn).await?;
+    let units = proxy.list_units().await?;
+    for unit in units {
+        if unit.name == unit_name {
+            return Ok(unit.active_state);
+        }
+    }
+    // Unit not in the loaded list → treat as inactive
+    Ok("inactive".to_string())
 }

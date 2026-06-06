@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::Duration;
 
 use axum::{
     extract::{Path, State},
@@ -11,6 +12,7 @@ use serde_json::json;
 
 use crate::db;
 use crate::db::models::{CreateService, ReorderItem, Service, ServiceWithStatus, UpdateService};
+use crate::probe;
 use crate::AppState;
 use tower_sessions::Session;
 
@@ -151,6 +153,41 @@ pub(crate) async fn create_service(
 
     match result {
         Ok(r) => {
+            let new_id = r.last_insert_rowid();
+
+            // Trigger an immediate background probe so status is ready on the
+            // next frontend refetch instead of waiting for the next probe cycle.
+            let probe_db = state.db.clone();
+            let probe_tx = state.probe_tx.clone();
+            let timeout_secs = state.config.probe.timeout_secs;
+            let max_history = state.config.probe.max_history;
+            tokio::spawn(async move {
+                if let Ok(Some(svc)) = sqlx::query_as::<_, Service>(
+                    "SELECT id, systemd_unit, discovery_source, display_name, description, url, \
+                     icon, group_id, sort_order, probe_enabled, probe_interval, tags, visible, \
+                     created_at, updated_at FROM services WHERE id = ? AND probe_enabled = 1",
+                )
+                .bind(new_id)
+                .fetch_optional(&probe_db)
+                .await
+                {
+                    let timeout = Duration::from_secs(timeout_secs);
+                    if svc.url.is_some() {
+                        probe::uptime::probe_service(
+                            &probe_db,
+                            &svc,
+                            timeout,
+                            max_history,
+                            &probe_tx,
+                        )
+                        .await;
+                    } else if svc.systemd_unit.is_some() {
+                        probe::uptime::probe_systemd_unit(&probe_db, &svc, max_history, &probe_tx)
+                            .await;
+                    }
+                }
+            });
+
             let actor = session
                 .get::<String>("username")
                 .await
@@ -163,15 +200,12 @@ pub(crate) async fn create_service(
                 &actor,
                 "service.create",
                 Some("service"),
-                Some(r.last_insert_rowid()),
+                Some(new_id),
                 Some(&detail),
                 None,
             )
             .await;
-            (
-                StatusCode::CREATED,
-                Json(json!({"id": r.last_insert_rowid()})),
-            )
+            (StatusCode::CREATED, Json(json!({"id": new_id})))
         }
         Err(e) => {
             tracing::error!("Failed to create service: {e}");
