@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::time::Duration;
 
 use sqlx::SqlitePool;
@@ -31,7 +32,7 @@ struct UnitInfo {
     pub job_object_path: zvariant::OwnedObjectPath,
 }
 
-/// D-Bus proxy for per-unit service properties.
+/// D-Bus proxy for per-unit service properties (org.freedesktop.systemd1.Service).
 #[zbus::proxy(
     interface = "org.freedesktop.systemd1.Service",
     default_service = "org.freedesktop.systemd1",
@@ -41,13 +42,13 @@ trait ServiceUnit {
     #[zbus(property)]
     fn sockets(&self) -> zbus::Result<Vec<zvariant::OwnedObjectPath>>;
 
-    // Explicit name because zbus converts fn snake_case → CamelCase ("MainPid"),
-    // but the actual D-Bus property is "MainPID" (all-caps acronym).
+    // Explicit name: zbus converts fn snake_case → CamelCase ("MainPid") but
+    // the actual D-Bus property is "MainPID" (all-caps acronym).
     #[zbus(property, name = "MainPID")]
     fn main_pid(&self) -> zbus::Result<u32>;
 }
 
-/// D-Bus proxy for per-unit socket properties.
+/// D-Bus proxy for per-unit socket properties (org.freedesktop.systemd1.Socket).
 #[zbus::proxy(
     interface = "org.freedesktop.systemd1.Socket",
     default_service = "org.freedesktop.systemd1",
@@ -134,7 +135,8 @@ pub async fn discover_units(
         }
 
         // Attempt to detect the TCP port this service is listening on.
-        let url_hint = detect_url_hint(&connection, &unit.object_path).await;
+        let url_hint = detect_url_hint(&connection, &unit.object_path, name).await;
+        tracing::info!(unit = %name, url_hint = ?url_hint, "url hint detection result");
 
         unclaimed.push(DiscoveredUnit {
             unit_name: name.clone(),
@@ -157,53 +159,104 @@ pub async fn discover_units(
 
 /// Try to build a `http://localhost:{port}` URL hint for a service unit.
 ///
-/// Attempts two strategies in order:
-/// 1. Socket-activation: reads the unit's `Sockets` property and then each
-///    socket's `Listen` property to find a bound TCP port.
-/// 2. Procfs: reads `MainPID` and then `/proc/{pid}/net/tcp[6]` to find the
-///    first TCP port in LISTEN state.
-///
-/// Returns `None` if neither strategy finds a port (e.g. Unix-socket-only
-/// service, or D-Bus / filesystem permission denied).
+/// Three detection strategies in priority order:
+/// 1. Socket-activation: reads the unit's Sockets D-Bus property, then each
+///    socket's Listen property for a bound TCP port.
+/// 2. MainPID + inode match: reads the service's MainPID, collects its open
+///    socket inodes from /proc/{pid}/fd/, matches against /proc/{pid}/net/tcp[6].
+/// 3. cgroup.procs: iterates all PIDs in the service cgroup and applies the same
+///    inode-matched scan as stage 2.
 async fn detect_url_hint(
     connection: &Connection,
     object_path: &zvariant::OwnedObjectPath,
+    unit: &str,
 ) -> Option<String> {
-    if let Some(port) = detect_port_via_sockets(connection, object_path).await {
+    let path = object_path.as_str();
+
+    // Stage 1 — socket activation
+    if let Some(port) = detect_via_socket_activation(connection, path, unit).await {
         return Some(format!("http://localhost:{port}"));
     }
-    if let Some(port) = detect_port_via_proc(connection, object_path).await {
+
+    // Stage 2 — MainPID + inode-matched procfs
+    if let Some(port) = detect_via_main_pid(connection, path, unit).await {
         return Some(format!("http://localhost:{port}"));
     }
+
+    // Stage 3 — cgroup.procs fallback
+    if let Some(port) = detect_via_cgroup(unit).await {
+        return Some(format!("http://localhost:{port}"));
+    }
+
     None
 }
 
-/// Stage 1: query D-Bus `Sockets` → per-socket `Listen` → first TCP port.
-async fn detect_port_via_sockets(
+/// Stage 1 — query D-Bus Sockets → per-socket Listen → first TCP port.
+async fn detect_via_socket_activation(
     connection: &Connection,
-    object_path: &zvariant::OwnedObjectPath,
+    path: &str,
+    unit: &str,
 ) -> Option<u16> {
-    let service_proxy = ServiceUnitProxy::builder(connection)
-        .path(object_path.as_str())
-        .ok()?
-        .build()
-        .await
-        .ok()?;
+    let builder = match ServiceUnitProxy::builder(connection).path(path) {
+        Ok(b) => b,
+        Err(e) => {
+            tracing::warn!(unit, error = %e, "stage1: invalid unit object path");
+            return None;
+        }
+    };
+    let service_proxy = match builder.build().await {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::warn!(unit, error = %e, "stage1: failed to build service proxy");
+            return None;
+        }
+    };
 
-    let socket_paths = service_proxy.sockets().await.ok()?;
+    let socket_paths = match service_proxy.sockets().await {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!(unit, error = %e, "stage1: failed to read Sockets property");
+            return None;
+        }
+    };
+
+    if socket_paths.is_empty() {
+        tracing::debug!(
+            unit,
+            "stage1: no associated socket units (no socket activation)"
+        );
+        return None;
+    }
+
+    tracing::debug!(
+        unit,
+        count = socket_paths.len(),
+        "stage1: found socket units"
+    );
 
     for sock_path in &socket_paths {
         let Ok(builder) = SocketUnitProxy::builder(connection).path(sock_path.as_str()) else {
+            tracing::warn!(unit, sock = %sock_path, "stage1: invalid socket object path");
             continue;
         };
-        let Ok(socket_proxy) = builder.build().await else {
-            continue;
+        let socket_proxy = match builder.build().await {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::warn!(unit, sock = %sock_path, error = %e, "stage1: failed to build socket proxy");
+                continue;
+            }
         };
-        let Ok(entries) = socket_proxy.listen().await else {
-            continue;
+        let entries = match socket_proxy.listen().await {
+            Ok(e) => e,
+            Err(e) => {
+                tracing::warn!(unit, sock = %sock_path, error = %e, "stage1: failed to read Listen property");
+                continue;
+            }
         };
-        for (_kind, address) in &entries {
+        for (kind, address) in &entries {
+            tracing::debug!(unit, kind, address, "stage1: listen entry");
             if let Some(port) = parse_port_from_listen_address(address) {
+                tracing::info!(unit, port, "stage1: detected port via socket activation");
                 return Some(port);
             }
         }
@@ -212,57 +265,169 @@ async fn detect_port_via_sockets(
     None
 }
 
-/// Stage 2: read `MainPID` from D-Bus, then scan `/proc/{pid}/net/tcp[6]`.
-async fn detect_port_via_proc(
-    connection: &Connection,
-    object_path: &zvariant::OwnedObjectPath,
-) -> Option<u16> {
-    let service_proxy = ServiceUnitProxy::builder(connection)
-        .path(object_path.as_str())
-        .ok()?
-        .build()
-        .await
-        .ok()?;
+/// Stage 2 — read MainPID via D-Bus, then scan procfs with inode matching.
+async fn detect_via_main_pid(connection: &Connection, path: &str, unit: &str) -> Option<u16> {
+    let service_proxy = match ServiceUnitProxy::builder(connection).path(path) {
+        Ok(b) => match b.build().await {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::warn!(unit, error = %e, "stage2: failed to build service proxy");
+                return None;
+            }
+        },
+        Err(e) => {
+            tracing::warn!(unit, error = %e, "stage2: invalid unit object path");
+            return None;
+        }
+    };
 
-    let pid = service_proxy.main_pid().await.ok()?;
+    let pid = match service_proxy.main_pid().await {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::warn!(unit, error = %e, "stage2: failed to read MainPID property");
+            return None;
+        }
+    };
+
     if pid == 0 {
+        tracing::debug!(unit, "stage2: MainPID is 0");
         return None;
     }
 
-    parse_tcp_listen_port(pid).await
+    tracing::debug!(unit, pid, "stage2: scanning procfs");
+    listen_port_for_pid(pid, unit).await
 }
 
-/// Scan `/proc/{pid}/net/tcp` then `/proc/{pid}/net/tcp6` for the first port
-/// in LISTEN state (state field == `"0A"`).
-async fn parse_tcp_listen_port(pid: u32) -> Option<u16> {
-    for filename in &["tcp", "tcp6"] {
-        let path = format!("/proc/{pid}/net/{filename}");
-        let Ok(content) = tokio::fs::read_to_string(&path).await else {
+/// Stage 3 — read all PIDs from the service cgroup, scan each with inode matching.
+async fn detect_via_cgroup(unit: &str) -> Option<u16> {
+    let cgroup_path = format!("/sys/fs/cgroup/system.slice/{unit}/cgroup.procs");
+    let content = match tokio::fs::read_to_string(&cgroup_path).await {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::debug!(unit, error = %e, "stage3: cgroup.procs not readable");
+            return None;
+        }
+    };
+    tracing::debug!(unit, "stage3: scanning cgroup PIDs");
+    for line in content.lines() {
+        let Ok(pid) = line.trim().parse::<u32>() else {
             continue;
         };
-        // Skip the header line; collect columns into a Vec so a short/empty
-        // line uses `continue` instead of propagating None out of the function.
+        if let Some(port) = listen_port_for_pid(pid, unit).await {
+            return Some(port);
+        }
+    }
+    None
+}
+
+/// Find the first TCP LISTEN port owned by `pid` using socket inode matching.
+///
+/// Reads /proc/{pid}/fd/ to get the set of socket inodes this process has open,
+/// then matches those inodes against LISTEN entries in /proc/{pid}/net/tcp[6].
+/// If /proc/{pid}/fd/ is not readable (different UID, no CAP_SYS_PTRACE), falls
+/// back to accepting any LISTEN port — less accurate on multi-service systems,
+/// but still useful when only one port is expected.
+async fn listen_port_for_pid(pid: u32, unit: &str) -> Option<u16> {
+    let socket_inodes = collect_socket_inodes(pid).await;
+
+    if let Some(ref inodes) = socket_inodes {
+        tracing::debug!(
+            unit,
+            pid,
+            count = inodes.len(),
+            "collected socket inodes for pid"
+        );
+        if inodes.is_empty() {
+            tracing::debug!(unit, pid, "pid has no open sockets");
+            return None;
+        }
+    } else {
+        tracing::debug!(
+            unit,
+            pid,
+            "could not read /proc/{pid}/fd (permission?), will accept any listen port"
+        );
+    }
+
+    for filename in &["tcp", "tcp6"] {
+        let tcp_path = format!("/proc/{pid}/net/{filename}");
+        let content = match tokio::fs::read_to_string(&tcp_path).await {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::debug!(unit, pid, file = filename, error = %e, "procfs tcp not readable");
+                continue;
+            }
+        };
+
         for line in content.lines().skip(1) {
+            // columns: sl local_address rem_address st tx_queue rx_queue tr tmwhen retrnsmt uid timeout inode
             let cols: Vec<&str> = line.split_ascii_whitespace().collect();
-            // columns: sl, local_address, rem_address, st, ...
-            if cols.len() < 4 {
+            if cols.len() < 10 {
                 continue;
             }
             if cols[3] != "0A" {
                 // Not TCP_LISTEN
                 continue;
             }
-            // local_address is "{hex_ip}:{hex_port}" — port is after the last ':'
+
+            let inode: u64 = match cols[9].parse() {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+
+            // When we have inode data, require the inode to be one of this
+            // process's open sockets. Without inode data (permission denied),
+            // accept any LISTEN entry (less precise but best-effort).
+            let owned_by_pid = socket_inodes
+                .as_ref()
+                .map(|set| set.contains(&inode))
+                .unwrap_or(true);
+
+            if !owned_by_pid {
+                continue;
+            }
+
             if let Some(hex_port) = cols[1].rsplit(':').next() {
                 if let Ok(port) = u16::from_str_radix(hex_port, 16) {
                     if port > 0 {
+                        tracing::info!(
+                            unit,
+                            pid,
+                            port,
+                            inode_matched = socket_inodes.is_some(),
+                            "detected listening port"
+                        );
                         return Some(port);
                     }
                 }
             }
         }
     }
+
     None
+}
+
+/// Return the set of socket inodes open by `pid`, or `None` if
+/// /proc/{pid}/fd/ is not readable (different UID, no CAP_SYS_PTRACE).
+async fn collect_socket_inodes(pid: u32) -> Option<HashSet<u64>> {
+    let fd_dir = format!("/proc/{pid}/fd");
+    let mut dir = tokio::fs::read_dir(&fd_dir).await.ok()?;
+
+    let mut inodes = HashSet::new();
+    while let Ok(Some(entry)) = dir.next_entry().await {
+        let Ok(link) = tokio::fs::read_link(entry.path()).await else {
+            continue;
+        };
+        let s = link.to_string_lossy();
+        // Symlinks for sockets look like: socket:[12345678]
+        if let Some(inner) = s.strip_prefix("socket:[").and_then(|s| s.strip_suffix(']')) {
+            if let Ok(inode) = inner.parse::<u64>() {
+                inodes.insert(inode);
+            }
+        }
+    }
+
+    Some(inodes)
 }
 
 /// Parse a TCP port number from a systemd socket `Listen` address string.
@@ -277,15 +442,15 @@ fn parse_port_from_listen_address(address: &str) -> Option<u16> {
     if address.is_empty() || address.starts_with('/') {
         return None;
     }
-    // Try splitting on last ':' to extract port from "host:port" form
-    if let Some(hex_or_dec) = address.rsplit(':').next() {
-        if let Ok(port) = hex_or_dec.parse::<u16>() {
+    // Split on last ':' to extract port from "host:port" form
+    if let Some(after_colon) = address.rsplit(':').next() {
+        if let Ok(port) = after_colon.parse::<u16>() {
             if port > 0 {
                 return Some(port);
             }
         }
     }
-    // Fall back: entire string might be just a port number
+    // Entire string might be just a port number
     address.parse::<u16>().ok().filter(|&p| p > 0)
 }
 
