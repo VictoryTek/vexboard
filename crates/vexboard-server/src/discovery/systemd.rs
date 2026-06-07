@@ -41,7 +41,9 @@ trait ServiceUnit {
     #[zbus(property)]
     fn sockets(&self) -> zbus::Result<Vec<zvariant::OwnedObjectPath>>;
 
-    #[zbus(property)]
+    // Explicit name because zbus converts fn snake_case → CamelCase ("MainPid"),
+    // but the actual D-Bus property is "MainPID" (all-caps acronym).
+    #[zbus(property, name = "MainPID")]
     fn main_pid(&self) -> zbus::Result<u32>;
 }
 
@@ -191,14 +193,15 @@ async fn detect_port_via_sockets(
     let socket_paths = service_proxy.sockets().await.ok()?;
 
     for sock_path in &socket_paths {
-        let socket_proxy = SocketUnitProxy::builder(connection)
-            .path(sock_path.as_str())
-            .ok()?
-            .build()
-            .await
-            .ok()?;
-
-        let entries = socket_proxy.listen().await.ok()?;
+        let Ok(builder) = SocketUnitProxy::builder(connection).path(sock_path.as_str()) else {
+            continue;
+        };
+        let Ok(socket_proxy) = builder.build().await else {
+            continue;
+        };
+        let Ok(entries) = socket_proxy.listen().await else {
+            continue;
+        };
         for (_kind, address) in &entries {
             if let Some(port) = parse_port_from_listen_address(address) {
                 return Some(port);
@@ -237,21 +240,20 @@ async fn parse_tcp_listen_port(pid: u32) -> Option<u16> {
         let Ok(content) = tokio::fs::read_to_string(&path).await else {
             continue;
         };
-        // Skip the header line
+        // Skip the header line; collect columns into a Vec so a short/empty
+        // line uses `continue` instead of propagating None out of the function.
         for line in content.lines().skip(1) {
-            let mut cols = line.split_ascii_whitespace();
-            let _sl = cols.next()?;
-            let local_addr = cols.next()?;
-            let _rem_addr = cols.next()?;
-            let state = cols.next()?;
-
-            if state != "0A" {
+            let cols: Vec<&str> = line.split_ascii_whitespace().collect();
+            // columns: sl, local_address, rem_address, st, ...
+            if cols.len() < 4 {
+                continue;
+            }
+            if cols[3] != "0A" {
                 // Not TCP_LISTEN
                 continue;
             }
-
-            // local_addr is "{hex_ip}:{hex_port}" — port is after the last ':'
-            if let Some(hex_port) = local_addr.rsplit(':').next() {
+            // local_address is "{hex_ip}:{hex_port}" — port is after the last ':'
+            if let Some(hex_port) = cols[1].rsplit(':').next() {
                 if let Ok(port) = u16::from_str_radix(hex_port, 16) {
                     if port > 0 {
                         return Some(port);
