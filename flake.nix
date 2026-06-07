@@ -36,16 +36,23 @@
         #   Run `nix build` once — it will fail with "got: sha256-..." for each
         #   fakeHash below. Replace the placeholders with the values from those
         #   error messages, then re-run `nix build`.
+        # Pre-fetch Swagger UI zip so utoipa-swagger-ui's build script can use it
+        # from the Nix store (no network access in the sandbox).
+        swaggerUiZip = pkgs.fetchurl {
+          url = "https://github.com/swagger-api/swagger-ui/archive/refs/tags/v5.17.14.zip";
+          hash = "sha256-SBJE0IEgl7Efuu73n3HZQrFxYX+cn5UU5jrL4T5xzNw=";
+        };
+
         wasmBindgenCli = pkgs.rustPlatform.buildRustPackage rec {
           pname = "wasm-bindgen-cli";
           version = "0.2.121";
 
           src = pkgs.fetchCrate {
             inherit pname version;
-            hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+            hash = "sha256-ZOMgFNOcGkO66Jz/Z83eoIu+DIzo3Z/vq6Z5g6BDY/w=";
           };
 
-          cargoHash = "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=";
+          cargoHash = "sha256-DPdCDPTAPBrbqLUqnCwQu1dePs9lGg85JCJOCIr9qjU=";
 
           nativeBuildInputs = [ pkgs.pkg-config ];
           buildInputs = pkgs.lib.optionals pkgs.stdenv.isDarwin [
@@ -57,7 +64,7 @@
       in
       {
         packages.vexboard = pkgs.callPackage ./nix/package.nix {
-          inherit rustToolchain wasmBindgenCli;
+          inherit rustToolchain wasmBindgenCli swaggerUiZip;
           rustPlatform = customRustPlatform;
         };
         packages.default = self.packages.${system}.vexboard;

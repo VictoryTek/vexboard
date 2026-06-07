@@ -12,67 +12,55 @@ inside the `buildPhase`.
 
 ## Problems Identified
 
-### Problem 1: wasm-bindgen-cli version mismatch
-- `Cargo.lock` pins `wasm-bindgen` at **0.2.121**
-- `package.nix` takes `wasm-bindgen-cli` from `pkgs` (nixpkgs-unstable), which may be a
-  different version
-- Trunk enforces that the installed `wasm-bindgen-cli` binary matches the version in Cargo.lock;
-  a mismatch aborts the build with a hard error
-- **Fix:** Override `wasm-bindgen-cli` in the flake to build from source at exactly 0.2.121,
-  using `pkgs.rustPlatform.buildRustPackage` with `fetchCrate`. Hash placeholders use
-  `lib.fakeHash`; user fills in real hashes from the first `nix build` error message.
+### Problem 1: wasm-bindgen-cli placeholder hashes
+- `flake.nix` used `lib.fakeHash` / placeholder strings for `wasm-bindgen-cli` 0.2.121
+- `hash` and `cargoHash` placeholders cause `nix build` to fail until replaced with real values
+- **Fix:** Replace placeholders with the real SRI hashes obtained from the first failed build
 
-### Problem 2: trunk build sandbox issues
-- Nix derivation builds run with `HOME` unset or pointing to a read-only location
-- Trunk writes a cache/config to `$HOME/.local/share/trunk` or `$XDG_CACHE_HOME/trunk`
-- Trunk by default attempts to download `wasm-opt` at build time; network is blocked in sandbox
+### Problem 2: utoipa-swagger-ui downloads Swagger UI at build time
+- `utoipa-swagger-ui` 9.0.2 build script curls
+  `https://github.com/swagger-api/swagger-ui/archive/refs/tags/v5.17.14.zip`
+- Network access is blocked in the Nix sandbox — build fails
 - **Fix:**
-  - Set `export HOME=$(mktemp -d)` at the start of `buildPhase`
-  - Add `pkgs.binaryen` (provides `wasm-opt`) to `nativeBuildInputs`
-  - Set `TRUNK_TOOLS_WASM_OPT_VERSION=skip` so trunk uses the system binary rather than
-    downloading; wasm-opt is still provided via nativeBuildInputs for actual optimization
+  - Add `swaggerUiZip = pkgs.fetchurl { ... }` fixed-output derivation in `flake.nix`
+  - Pass `swaggerUiZip` to `pkgs.callPackage ./nix/package.nix { ... }`
+  - In `package.nix`: add `curl` to `nativeBuildInputs` and set
+    `SWAGGER_UI_DOWNLOAD_URL = "file://${swaggerUiZip}";` so the build script
+    reads from the Nix store instead of the network
 
-### Problem 3: pam-auth feature unconditionally enabled (minor)
-- `package.nix` passes `--features pam-auth` unconditionally
-- `linux-pam` is in buildInputs, so it compiles, but it should be gated on Linux-only platforms
-  explicitly in the meta
-- **Fix:** Add `linux-pam` guard and note; `platforms = platforms.linux` is already set, so
-  this is acceptable but should be documented
-
-### Non-issue: SQLx offline cache
-- Project uses `sqlx::query(...)` runtime calls only — no `query!` macros
-- No `.sqlx/` directory or `SQLX_OFFLINE=true` is required
-- Confirmed by grepping: 0 occurrences of `query!`, `query_as!`, `query_scalar!` macros
+### Problem 3 (prior): trunk sandbox issues — RESOLVED
+- Trunk writes cache to `$HOME`; fixed via `export HOME=$(mktemp -d)`
+- Trunk downloads `wasm-opt`; fixed via `binaryen` in nativeBuildInputs + `TRUNK_TOOLS_WASM_OPT_VERSION=skip`
 
 ## Proposed Solution
 
-### nix/package.nix
-- Accept `wasmBindgenCli` as a parameter (renamed from `wasm-bindgen-cli` for clarity)
-- Add `binaryen` to `nativeBuildInputs`
-- Set `HOME`, `TRUNK_TOOLS_WASM_OPT_VERSION=skip` in `buildPhase`
-
 ### flake.nix
-- Define a local `wasmBindgenCli` derivation pinned to 0.2.121 using `pkgs.rustPlatform.buildRustPackage`
-- Pass it explicitly to `callPackage ./nix/package.nix { wasmBindgenCli = wasmBindgenCli; }`
-- Add `binaryen` to `devShells.default` buildInputs
+1. Replace `hash` placeholder with `sha256-ZOMgFNOcGkO66Jz/Z83eoIu+DIzo3Z/vq6Z5g6BDY/w=`
+2. Replace `cargoHash` placeholder with `sha256-DPdCDPTAPBrbqLUqnCwQu1dePs9lGg85JCJOCIr9qjU=`
+3. Add `swaggerUiZip = pkgs.fetchurl { url = "...v5.17.14.zip"; hash = "sha256-SBJE0IEgl7Efuu73n3HZQrFxYX+cn5UU5jrL4T5xzNw="; };`
+4. Pass `swaggerUiZip` in `inherit` to `callPackage`
+
+### nix/package.nix
+1. Add `curl` and `swaggerUiZip` to function arguments
+2. Add `curl` to `nativeBuildInputs`
+3. Set `SWAGGER_UI_DOWNLOAD_URL = "file://${swaggerUiZip}";` as top-level attribute
 
 ## Implementation Steps
-1. Edit `flake.nix`: add `wasmBindgenCli` overlay derivation, pass to `callPackage`, add `binaryen` to devShell
-2. Edit `nix/package.nix`: rename param, add `binaryen` to nativeBuildInputs, fix buildPhase env
+1. Edit `flake.nix`: fix hashes, add swaggerUiZip fetchurl, pass through callPackage
+2. Edit `nix/package.nix`: add curl + swaggerUiZip args, add curl to nativeBuildInputs, set env var
 
 ## Dependencies
-- `pkgs.binaryen` — provides `wasm-opt`; available in nixpkgs-unstable
-- `pkgs.rustPlatform.buildRustPackage` — already used; no new flake inputs needed
+- `pkgs.fetchurl` — fixed-output derivation; available in nixpkgs
+- `pkgs.curl` — curl CLI; available in nixpkgs; needed by utoipa-swagger-ui build script
 
 ## Build/Test Commands (Phase 3)
-- `cargo fmt --all -- --check`
-- `cargo clippy --workspace -- -D warnings`
-- `cargo test --workspace`
-- Nix syntax check: `nix flake check --no-build` (validates expression without building)
+- `cargo fmt --all -- --check` — zero resource cost
+- `cargo clippy --workspace -- -D warnings` — lint only
+- `cargo test --workspace` — server-side tests only (frontend excluded)
+- `cargo build --release --bin vexboard-server` — backend binary only
+- `nix build` — full Nix derivation build (required by user; validates both fixes end-to-end)
 
 ## Risks
-- `lib.fakeHash` placeholders in `wasmBindgenCli` will cause `nix build` to fail on first run
-  with the correct hash in the error message — this is expected Nix workflow
-- If nixpkgs-unstable already ships 0.2.121, the override is still correct (same hash)
-- `TRUNK_TOOLS_WASM_OPT_VERSION=skip` tells trunk to skip its own wasm-opt download;
-  the actual optimization still runs via the system `wasm-opt` from `binaryen`
+- `nix build` compiles the entire project + WASM frontend; time and disk intensive
+- If the swaggerUiZip hash is wrong, Nix will report the correct hash in the error
+- `curl` must be available in `nativeBuildInputs` for the build script's file:// URL copy

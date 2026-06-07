@@ -1,5 +1,5 @@
 { lib, rustPlatform, rustToolchain, pkg-config, openssl, dbus, linux-pam
-, trunk, wasmBindgenCli, binaryen }:
+, trunk, wasmBindgenCli, binaryen, curl, swaggerUiZip }:
 
 let
   src = lib.cleanSource ./..;
@@ -19,7 +19,12 @@ rustPlatform.buildRustPackage {
     trunk
     wasmBindgenCli
     binaryen        # provides wasm-opt; prevents trunk from downloading it (no network in sandbox)
+    curl            # needed by utoipa-swagger-ui build script to copy the pre-fetched zip
   ];
+
+  # Point utoipa-swagger-ui's build script to the pre-fetched zip so it doesn't
+  # attempt a network download (blocked by the Nix sandbox).
+  SWAGGER_UI_DOWNLOAD_URL = "file://${swaggerUiZip}";
 
   buildInputs = [
     openssl
