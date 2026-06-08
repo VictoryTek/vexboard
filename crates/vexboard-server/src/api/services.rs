@@ -172,7 +172,10 @@ pub(crate) async fn create_service(
                 .await
                 {
                     let timeout = Duration::from_secs(timeout_secs);
-                    if svc.url.is_some() {
+                    if svc.systemd_unit.is_some() {
+                        probe::uptime::probe_systemd_unit(&probe_db, &svc, max_history, &probe_tx)
+                            .await;
+                    } else if svc.url.is_some() {
                         probe::uptime::probe_service(
                             &probe_db,
                             &svc,
@@ -181,9 +184,6 @@ pub(crate) async fn create_service(
                             &probe_tx,
                         )
                         .await;
-                    } else if svc.systemd_unit.is_some() {
-                        probe::uptime::probe_systemd_unit(&probe_db, &svc, max_history, &probe_tx)
-                            .await;
                     }
                 }
             });
