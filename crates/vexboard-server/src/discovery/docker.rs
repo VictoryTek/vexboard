@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::time::Duration;
 
 use bollard::container::ListContainersOptions;
@@ -36,6 +37,17 @@ pub async fn discover_containers(
     db: &SqlitePool,
     config: &DockerConfig,
 ) -> anyhow::Result<()> {
+    // Collect current systemd unit names for cross-reference deduplication.
+    // If systemd discovery has already run, containers whose unit name is already
+    // in this set will be suppressed so they don't appear twice in the panel.
+    let systemd_units: HashSet<String> = {
+        let list = discoveries.read().await;
+        list.iter()
+            .filter(|u| u.source == "systemd")
+            .map(|u| u.unit_name.clone())
+            .collect()
+    };
+
     let mut all = Vec::new();
 
     for socket in &config.sockets {
@@ -47,7 +59,8 @@ pub async fn discover_containers(
         } else {
             "docker"
         };
-        match discover_from_socket(socket, source, db, &config.exclude_images).await {
+        match discover_from_socket(socket, source, db, &config.exclude_images, &systemd_units).await
+        {
             Ok(mut units) => all.append(&mut units),
             Err(e) => tracing::debug!(%socket, "socket query failed: {e}"),
         }
@@ -79,6 +92,7 @@ async fn discover_from_socket(
     source: &str,
     db: &SqlitePool,
     exclude_images: &[String],
+    systemd_units: &HashSet<String>,
 ) -> anyhow::Result<Vec<DiscoveredUnit>> {
     let host = socket_host(socket);
     let docker = Docker::connect_with_socket(socket, 10, bollard::API_DEFAULT_VERSION)?;
@@ -122,12 +136,43 @@ async fn discover_from_socket(
             continue;
         }
 
+        // Tier 1: Podman sets PODMAN_SYSTEMD_UNIT on every container it manages
+        // via a systemd unit (quadlets or podman generate systemd). Skip these
+        // unconditionally — systemd discovery handles them, and showing them here
+        // too produces a confusing duplicate with a misleading "docker-*" name.
+        let systemd_unit_label = c
+            .labels
+            .as_ref()
+            .and_then(|l| l.get("PODMAN_SYSTEMD_UNIT"))
+            .cloned();
+
+        if let Some(ref unit_name) = systemd_unit_label {
+            tracing::debug!(
+                container = %name,
+                unit = %unit_name,
+                "container discovery: skipping container managed by systemd unit"
+            );
+            continue;
+        }
+
+        // Tier 2: if systemd discovery already found a service whose unit name
+        // matches <container-name>.service, suppress the container entry too.
+        let candidate_unit = format!("{name}.service");
+        if systemd_units.contains(&candidate_unit) {
+            tracing::debug!(
+                container = %name,
+                unit = %candidate_unit,
+                "container discovery: skipping container already represented by systemd discovery"
+            );
+            continue;
+        }
+
         // Skip excluded images
         if exclude_images.iter().any(|e| image.contains(e.as_str())) {
             continue;
         }
 
-        // Skip if already claimed by either display_name or systemd_unit.
+        // Skip if already claimed by display_name, container name, or systemd_unit.
         let claimed = sqlx::query_scalar::<_, bool>(
             "SELECT EXISTS(SELECT 1 FROM services WHERE display_name = ? OR systemd_unit = ? LIMIT 1)",
         )
