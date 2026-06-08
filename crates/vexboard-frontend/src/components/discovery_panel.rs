@@ -180,7 +180,7 @@ pub fn DiscoveryPanel(#[prop(into)] on_added: Callback<()>) -> impl IntoView {
                                                  border:1px solid {color}40; \
                                                  border-radius:20px; padding:3px 9px; margin-bottom:0.3rem;"
                                             )>{label}</span>
-                                            <p style="font-size:0.875rem; font-weight:600; color:var(--color-text-primary); margin:0 0 0.15rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                            <p style="font-size:1.05rem; font-weight:600; color:var(--color-text-primary); margin:0 0 0.15rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                                                 {name}
                                             </p>
                                             <p style="font-size:0.75rem; color:var(--color-text-muted); margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
