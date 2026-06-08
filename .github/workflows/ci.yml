@@ -59,7 +59,7 @@ jobs:
           kill $SERVER_PID
 
       - name: Upload OpenAPI spec
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: openapi-spec-${{ github.sha }}
           path: openapi.json
