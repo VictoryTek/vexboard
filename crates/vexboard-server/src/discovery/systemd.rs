@@ -300,26 +300,62 @@ async fn query_container_port(runtime: &str, container: &str, unit: &str) -> Opt
     parse_docker_port_output(&stdout)
 }
 
-/// Parse the first valid host port from `docker port` / `podman port` output.
+/// Parse the best host port from `docker port` / `podman port` output.
 ///
 /// Each line has the form:
 ///   `{container-port}/tcp -> {host-ip}:{host-port}`
-/// e.g. `8444/tcp -> 0.0.0.0:8444` or `80/tcp -> :::80`
+/// e.g. `81/tcp -> 0.0.0.0:81` or `443/tcp -> :::8444`
+///
+/// Selection priority (highest first):
+/// 1. Non-HTTPS, non-proxy ports (container port ≠ 443/8443/4443 and ≠ 80)
+/// 2. Port 80 (generic HTTP, may be proxy traffic rather than admin UI)
+/// 3. Any port (raw fallback when all exposed ports are HTTPS)
 fn parse_docker_port_output(output: &str) -> Option<u16> {
+    let mut preferred: Option<u16> = None; // tier 1: non-HTTPS, non-80
+    let mut fallback_80: Option<u16> = None; // tier 2: container port 80
+    let mut any_port: Option<u16> = None; // tier 3: raw fallback
+
     for line in output.lines() {
         let Some(arrow) = line.find("->") else {
             continue;
         };
+
+        // Left side: "{container_port}/tcp " or "{container_port}/udp "
+        let container_port: u16 = match line[..arrow]
+            .trim()
+            .split('/')
+            .next()
+            .and_then(|s| s.parse().ok())
+        {
+            Some(p) => p,
+            None => continue,
+        };
+
         let host_part = line[arrow + 2..].trim();
-        if let Some(port_str) = host_part.rsplit(':').next() {
-            if let Ok(port) = port_str.trim().parse::<u16>() {
-                if port > 0 {
-                    return Some(port);
-                }
-            }
+        let host_port: u16 = match host_part
+            .rsplit(':')
+            .next()
+            .and_then(|s| s.trim().parse().ok())
+        {
+            Some(p) if p > 0 => p,
+            _ => continue,
+        };
+
+        any_port.get_or_insert(host_port);
+
+        // Skip HTTPS container ports — url_hints use http:// so these are not useful
+        if matches!(container_port, 443 | 8443 | 4443) {
+            continue;
+        }
+
+        if container_port == 80 {
+            fallback_80.get_or_insert(host_port);
+        } else {
+            preferred.get_or_insert(host_port);
         }
     }
-    None
+
+    preferred.or(fallback_80).or(any_port)
 }
 
 /// Read the `MainPID` property from the service unit's D-Bus object.
@@ -705,15 +741,31 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_docker_port_output_single() {
-        let output = "8444/tcp -> 0.0.0.0:8444\n";
+    fn test_parse_docker_port_output_single_https_fallback() {
+        // Only an HTTPS port → return it as raw fallback (better than nothing)
+        let output = "443/tcp -> 0.0.0.0:8444\n";
         assert_eq!(parse_docker_port_output(output), Some(8444));
     }
 
     #[test]
-    fn test_parse_docker_port_output_multi_returns_first() {
-        let output = "80/tcp -> 0.0.0.0:80\n81/tcp -> 0.0.0.0:81\n443/tcp -> 0.0.0.0:443\n8444/tcp -> 0.0.0.0:8444\n";
+    fn test_parse_docker_port_output_npm_like_prefers_admin_port() {
+        // Nginx Proxy Manager: 443→8444 (HTTPS, skip), 80→80 (proxy, low priority), 81→81 (admin, prefer)
+        let output = "443/tcp -> 0.0.0.0:8444\n80/tcp -> 0.0.0.0:80\n81/tcp -> 0.0.0.0:81\n";
+        assert_eq!(parse_docker_port_output(output), Some(81));
+    }
+
+    #[test]
+    fn test_parse_docker_port_output_single_port_80_fallback() {
+        // Service that only exposes port 80 → return 80
+        let output = "80/tcp -> 0.0.0.0:80\n";
         assert_eq!(parse_docker_port_output(output), Some(80));
+    }
+
+    #[test]
+    fn test_parse_docker_port_output_prefers_non_80() {
+        // When both 80 and a non-HTTPS non-80 port are present, prefer the latter
+        let output = "80/tcp -> 0.0.0.0:80\n8080/tcp -> 0.0.0.0:8080\n";
+        assert_eq!(parse_docker_port_output(output), Some(8080));
     }
 
     #[test]

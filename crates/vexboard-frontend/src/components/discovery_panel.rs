@@ -13,7 +13,26 @@ struct DiscoveredUnitFe {
 
 impl DiscoveredUnitFe {
     fn display_name(&self) -> String {
-        self.unit_name.trim_end_matches(".service").to_string()
+        let base = self.unit_name.trim_end_matches(".service");
+        // Strip OCI runtime prefix from systemd-managed container units
+        // e.g. "docker-nginx-proxy-manager" → "nginx-proxy-manager"
+        let stripped = base
+            .strip_prefix("docker-")
+            .or_else(|| base.strip_prefix("podman-"))
+            .unwrap_or(base);
+        // Convert hyphens/underscores to spaces and title-case each word
+        stripped
+            .split(['-', '_'])
+            .filter(|s| !s.is_empty())
+            .map(|word| {
+                let mut chars = word.chars();
+                match chars.next() {
+                    None => String::new(),
+                    Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 
     fn source_label(&self) -> &str {
