@@ -157,15 +157,31 @@ pub async fn discover_units(
     Ok(())
 }
 
+/// Outcome of OCI container runtime detection.
+enum OciDetect {
+    /// OCI service and a host port was discovered.
+    Found(u16),
+    /// OCI service confirmed but no port could be discovered.
+    /// Callers should return `None` rather than falling through to UID matching,
+    /// which would produce false positives (e.g. CUPS on port 631 also running as root).
+    NoPort,
+    /// The service's main process is not a container runtime; continue normal detection.
+    NotOci,
+}
+
 /// Try to build a `http://localhost:{port}` URL hint for a service unit.
 ///
-/// Three detection strategies in priority order:
+/// Four detection strategies in priority order:
 /// 1. Socket-activation: reads the unit's Sockets D-Bus property, then each
 ///    socket's Listen property for a bound TCP port.
-/// 2. MainPID + inode match: reads the service's MainPID, collects its open
+/// 2. OCI detection: reads /proc/{MainPID}/exe; if it is a container runtime
+///    (podman, docker) queries `podman port` / `docker port` for host bindings.
+///    If OCI is confirmed but no port is found, returns None without falling
+///    through to UID matching (prevents CUPS-port false positives).
+/// 3. MainPID + inode match: reads the service's MainPID, collects its open
 ///    socket inodes from /proc/{pid}/fd/, matches against /proc/{pid}/net/tcp[6].
-/// 3. cgroup.procs: iterates all PIDs in the service cgroup and applies the same
-///    inode-matched scan as stage 2.
+/// 4. cgroup.procs: iterates all PIDs in the service cgroup and applies the same
+///    inode-matched scan as stage 3.
 async fn detect_url_hint(
     connection: &Connection,
     object_path: &zvariant::OwnedObjectPath,
@@ -178,17 +194,156 @@ async fn detect_url_hint(
         return Some(format!("http://localhost:{port}"));
     }
 
-    // Stage 2 — MainPID + inode-matched procfs
+    // Stage 2 — OCI container runtime detection
+    match detect_via_oci(connection, path, unit).await {
+        OciDetect::Found(port) => return Some(format!("http://localhost:{port}")),
+        // OCI confirmed but no port — skip UID-matching stages to prevent false positives
+        OciDetect::NoPort => return None,
+        OciDetect::NotOci => {}
+    }
+
+    // Stage 3 — MainPID + inode-matched procfs (non-OCI only)
     if let Some(port) = detect_via_main_pid(connection, path, unit).await {
         return Some(format!("http://localhost:{port}"));
     }
 
-    // Stage 3 — cgroup.procs fallback
+    // Stage 4 — cgroup.procs fallback (non-OCI only)
     if let Some(port) = detect_via_cgroup(unit).await {
         return Some(format!("http://localhost:{port}"));
     }
 
     None
+}
+
+/// Stage 2 — detect OCI container services and query port bindings from the runtime.
+///
+/// Reads `MainPID` via D-Bus, checks `/proc/{pid}/exe` for a container runtime
+/// binary, then runs `podman port` or `docker port` to obtain host-side TCP port
+/// bindings for the container.
+async fn detect_via_oci(connection: &Connection, path: &str, unit: &str) -> OciDetect {
+    // Read MainPID
+    let pid = match read_main_pid(connection, path, unit).await {
+        Some(p) if p > 0 => p,
+        _ => return OciDetect::NotOci,
+    };
+
+    // Check the executable of the main process
+    let exe_path = match tokio::fs::read_link(format!("/proc/{pid}/exe")).await {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::debug!(unit, pid, error = %e, "oci: could not read /proc/{pid}/exe");
+            return OciDetect::NotOci;
+        }
+    };
+
+    let runtime_bin: &str = match exe_path.file_name().and_then(|n| n.to_str()) {
+        Some("podman") | Some("podman-remote") => "podman",
+        Some("docker") => "docker",
+        other => {
+            tracing::debug!(unit, pid, exe = ?other, "oci: main process is not a container runtime");
+            return OciDetect::NotOci;
+        }
+    };
+
+    tracing::debug!(
+        unit,
+        pid,
+        runtime = runtime_bin,
+        "oci: detected container runtime"
+    );
+
+    // Derive container name candidates from the unit name
+    let base = unit.strip_suffix(".service").unwrap_or(unit);
+    let candidates = [base.to_string(), format!("systemd-{base}")];
+
+    for name in &candidates {
+        if let Some(port) = query_container_port(runtime_bin, name, unit).await {
+            tracing::info!(unit, container = %name, port, "oci: discovered container port");
+            return OciDetect::Found(port);
+        }
+    }
+
+    tracing::debug!(
+        unit,
+        "oci: runtime detected but no port found for any candidate name"
+    );
+    OciDetect::NoPort
+}
+
+/// Run `<runtime> port <container_name>` and return the first valid host port.
+async fn query_container_port(runtime: &str, container: &str, unit: &str) -> Option<u16> {
+    let output = match tokio::process::Command::new(runtime)
+        .args(["port", container])
+        .output()
+        .await
+    {
+        Ok(o) => o,
+        Err(e) => {
+            tracing::debug!(unit, runtime, container, error = %e, "oci: failed to spawn runtime");
+            return None;
+        }
+    };
+
+    if !output.status.success() {
+        tracing::debug!(
+            unit,
+            runtime,
+            container,
+            status = %output.status,
+            "oci: port query returned non-zero (container may not exist or not be running)"
+        );
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    tracing::debug!(unit, container, output = %stdout.trim(), "oci: port output");
+    parse_docker_port_output(&stdout)
+}
+
+/// Parse the first valid host port from `docker port` / `podman port` output.
+///
+/// Each line has the form:
+///   `{container-port}/tcp -> {host-ip}:{host-port}`
+/// e.g. `8444/tcp -> 0.0.0.0:8444` or `80/tcp -> :::80`
+fn parse_docker_port_output(output: &str) -> Option<u16> {
+    for line in output.lines() {
+        let Some(arrow) = line.find("->") else {
+            continue;
+        };
+        let host_part = line[arrow + 2..].trim();
+        if let Some(port_str) = host_part.rsplit(':').next() {
+            if let Ok(port) = port_str.trim().parse::<u16>() {
+                if port > 0 {
+                    return Some(port);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Read the `MainPID` property from the service unit's D-Bus object.
+async fn read_main_pid(connection: &Connection, path: &str, unit: &str) -> Option<u32> {
+    let builder = match ServiceUnitProxy::builder(connection).path(path) {
+        Ok(b) => b,
+        Err(e) => {
+            tracing::warn!(unit, error = %e, "read_main_pid: invalid object path");
+            return None;
+        }
+    };
+    match builder.build().await {
+        Ok(proxy) => match proxy.main_pid().await {
+            Ok(pid) => Some(pid),
+            Err(e) => {
+                tracing::warn!(unit, error = %e, "read_main_pid: failed to read MainPID");
+                None
+            }
+        },
+        Err(e) => {
+            tracing::warn!(unit, error = %e, "read_main_pid: failed to build proxy");
+            None
+        }
+    }
 }
 
 /// Stage 1 — query D-Bus Sockets → per-socket Listen → first TCP port.
@@ -547,5 +702,34 @@ mod tests {
     fn test_parse_port_zero_excluded() {
         assert_eq!(parse_port_from_listen_address("0.0.0.0:0"), None);
         assert_eq!(parse_port_from_listen_address("0"), None);
+    }
+
+    #[test]
+    fn test_parse_docker_port_output_single() {
+        let output = "8444/tcp -> 0.0.0.0:8444\n";
+        assert_eq!(parse_docker_port_output(output), Some(8444));
+    }
+
+    #[test]
+    fn test_parse_docker_port_output_multi_returns_first() {
+        let output = "80/tcp -> 0.0.0.0:80\n81/tcp -> 0.0.0.0:81\n443/tcp -> 0.0.0.0:443\n8444/tcp -> 0.0.0.0:8444\n";
+        assert_eq!(parse_docker_port_output(output), Some(80));
+    }
+
+    #[test]
+    fn test_parse_docker_port_output_ipv6() {
+        let output = "80/tcp -> :::80\n";
+        assert_eq!(parse_docker_port_output(output), Some(80));
+    }
+
+    #[test]
+    fn test_parse_docker_port_output_empty() {
+        assert_eq!(parse_docker_port_output(""), None);
+        assert_eq!(parse_docker_port_output("  \n"), None);
+    }
+
+    #[test]
+    fn test_parse_docker_port_output_no_arrow() {
+        assert_eq!(parse_docker_port_output("not a port line\n"), None);
     }
 }
