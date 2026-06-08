@@ -322,11 +322,14 @@ async fn detect_via_cgroup(unit: &str) -> Option<u16> {
 
 /// Find the first TCP LISTEN port owned by `pid` using socket inode matching.
 ///
-/// Reads /proc/{pid}/fd/ to get the set of socket inodes this process has open,
-/// then matches those inodes against LISTEN entries in /proc/{pid}/net/tcp[6].
-/// If /proc/{pid}/fd/ is not readable (different UID, no CAP_SYS_PTRACE), falls
-/// back to accepting any LISTEN port — less accurate on multi-service systems,
-/// but still useful when only one port is expected.
+/// Ownership is determined in priority order:
+/// 1. Inode matching: read /proc/{pid}/fd/ symlinks, match socket:[inode] against
+///    the inode column of /proc/{pid}/net/tcp[6]. Most accurate.
+/// 2. UID matching: when /proc/{pid}/fd/ is unreadable (different user, no
+///    CAP_SYS_PTRACE), read the process effective UID from /proc/{pid}/status and
+///    match against the uid column of the TCP table. Avoids false positives from
+///    other services (e.g. CUPS on port 631 before the target service's port).
+/// 3. Neither readable: return None rather than guess.
 async fn listen_port_for_pid(pid: u32, unit: &str) -> Option<u16> {
     let socket_inodes = collect_socket_inodes(pid).await;
 
@@ -341,13 +344,18 @@ async fn listen_port_for_pid(pid: u32, unit: &str) -> Option<u16> {
             tracing::debug!(unit, pid, "pid has no open sockets");
             return None;
         }
-    } else {
-        tracing::debug!(
-            unit,
-            pid,
-            "could not read /proc/{pid}/fd (permission?), will accept any listen port"
-        );
     }
+
+    // When inode data is unavailable, fall back to UID matching: read the
+    // process effective UID from /proc/{pid}/status (always world-readable) and
+    // filter the TCP table by the uid column.
+    let proc_uid: Option<u32> = if socket_inodes.is_none() {
+        let uid = read_proc_uid(pid).await;
+        tracing::debug!(unit, pid, uid = ?uid, "fd/ unreadable, falling back to uid matching");
+        uid
+    } else {
+        None
+    };
 
     for filename in &["tcp", "tcp6"] {
         let tcp_path = format!("/proc/{pid}/net/{filename}");
@@ -375,13 +383,15 @@ async fn listen_port_for_pid(pid: u32, unit: &str) -> Option<u16> {
                 Err(_) => continue,
             };
 
-            // When we have inode data, require the inode to be one of this
-            // process's open sockets. Without inode data (permission denied),
-            // accept any LISTEN entry (less precise but best-effort).
-            let owned_by_pid = socket_inodes
-                .as_ref()
-                .map(|set| set.contains(&inode))
-                .unwrap_or(true);
+            let owned_by_pid = match &socket_inodes {
+                Some(inodes) => inodes.contains(&inode),
+                None => match proc_uid {
+                    // cols[7] is the socket owner UID in /proc/net/tcp
+                    Some(uid) => cols[7].parse::<u32>().ok() == Some(uid),
+                    // Can't determine ownership — skip rather than guess
+                    None => false,
+                },
+            };
 
             if !owned_by_pid {
                 continue;
@@ -404,6 +414,22 @@ async fn listen_port_for_pid(pid: u32, unit: &str) -> Option<u16> {
         }
     }
 
+    None
+}
+
+/// Read the effective UID of process `pid` from /proc/{pid}/status.
+async fn read_proc_uid(pid: u32) -> Option<u32> {
+    let content = tokio::fs::read_to_string(format!("/proc/{pid}/status"))
+        .await
+        .ok()?;
+    for line in content.lines() {
+        // "Uid:\t1000\t1000\t1000\t1000"  (real, effective, saved, fs)
+        if let Some(rest) = line.strip_prefix("Uid:") {
+            let mut parts = rest.split_ascii_whitespace();
+            parts.next(); // skip real uid
+            return parts.next()?.parse::<u32>().ok(); // effective uid
+        }
+    }
     None
 }
 
