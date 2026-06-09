@@ -344,7 +344,7 @@ fn parse_docker_port_output(output: &str) -> Option<u16> {
         any_port.get_or_insert(host_port);
 
         // Skip HTTPS container ports — url_hints use http:// so these are not useful
-        if matches!(container_port, 443 | 8443 | 4443) {
+        if matches!(container_port, 443 | 8443 | 4443 | 8444) {
             continue;
         }
 
@@ -745,6 +745,13 @@ mod tests {
         // Only an HTTPS port → return it as raw fallback (better than nothing)
         let output = "443/tcp -> 0.0.0.0:8444\n";
         assert_eq!(parse_docker_port_output(output), Some(8444));
+    }
+
+    #[test]
+    fn test_parse_docker_port_output_npm_8444_direct() {
+        // NPM with 8444/tcp mapped directly (not via 443) — must prefer admin port 81
+        let output = "8444/tcp -> 0.0.0.0:8444\n80/tcp -> 0.0.0.0:80\n81/tcp -> 0.0.0.0:81\n";
+        assert_eq!(parse_docker_port_output(output), Some(81));
     }
 
     #[test]

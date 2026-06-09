@@ -186,24 +186,45 @@ async fn discover_from_socket(
             continue;
         }
 
-        // Find first mapped public port for URL hint.
+        // Pick the best public port for the URL hint using a three-tier priority:
+        //   Tier 1 (preferred): non-80 and non-HTTPS container port
+        //   Tier 2: container port 80 (generic HTTP / proxy traffic)
+        //   Tier 3: any mapped port (raw fallback)
         // Prefer the port's bound IP when it's a specific address; fall back
         // to the host derived from the socket (localhost for Unix sockets,
         // the remote hostname for TCP endpoints).
         let url_hint = c.ports.as_ref().and_then(|ports| {
-            ports
-                .iter()
-                .find(|p| p.public_port.is_some())
-                .and_then(|p| {
-                    let port = p.public_port?;
-                    let bound = p.ip.as_deref().unwrap_or("");
-                    let h = if bound.is_empty() || bound == "0.0.0.0" || bound == "::" {
-                        host
-                    } else {
-                        bound
-                    };
-                    Some(format!("http://{h}:{port}"))
-                })
+            let mut preferred: Option<(u16, &str)> = None;
+            let mut fallback_80: Option<(u16, &str)> = None;
+            let mut any_port: Option<(u16, &str)> = None;
+
+            for p in ports {
+                let Some(pub_port) = p.public_port else {
+                    continue;
+                };
+                let bound = p.ip.as_deref().unwrap_or("");
+                let h = if bound.is_empty() || bound == "0.0.0.0" || bound == "::" {
+                    host
+                } else {
+                    bound
+                };
+                any_port.get_or_insert((pub_port, h));
+
+                let container_port = p.private_port;
+                if matches!(container_port, 443 | 8443 | 4443 | 8444) {
+                    continue;
+                }
+                if container_port == 80 {
+                    fallback_80.get_or_insert((pub_port, h));
+                } else {
+                    preferred.get_or_insert((pub_port, h));
+                }
+            }
+
+            preferred
+                .or(fallback_80)
+                .or(any_port)
+                .map(|(port, h)| format!("http://{h}:{port}"))
         });
 
         units.push(DiscoveredUnit {
