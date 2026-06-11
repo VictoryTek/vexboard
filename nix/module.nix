@@ -57,7 +57,12 @@ in
     openFirewall = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "Whether to open the firewall for VexBoard's port.";
+      description = ''
+        Whether to open the firewall port for VexBoard. Defaults to false —
+        firewall exposure is an explicit opt-in. Enable only after configuring
+        a secret (secretFile) and deciding whether plain-HTTP local-network
+        access is acceptable for your threat model.
+      '';
     };
 
     secretFile = lib.mkOption {
@@ -65,14 +70,23 @@ in
       default = null;
       description = ''
         Path to a file containing environment variable overrides loaded at
-        service startup. Use this to supply the auth secret without putting
-        it in the Nix store:
+        service startup. This option MUST be set — the service will refuse to
+        start if VEXBOARD_AUTH__SECRET is absent or still the default
+        placeholder value.
 
-          VEXBOARD_AUTH__SECRET=your-random-secret-here
+        The file must contain at minimum:
 
-        Generate a suitable secret with:  openssl rand -base64 48
-        If null, the compiled-in default placeholder is used — do NOT leave
-        this unset in a production or internet-facing deployment.
+          VEXBOARD_AUTH__SECRET=<your-random-secret>
+
+        Generate a suitable secret with:
+          openssl rand -base64 48
+
+        Then write it to a root-owned file and reference it here:
+          echo "VEXBOARD_AUTH__SECRET=$(openssl rand -base64 48)" \
+            > /etc/vexboard/secret.env
+          chmod 0400 /etc/vexboard/secret.env
+          # In your NixOS configuration:
+          services.vexboard.secretFile = "/etc/vexboard/secret.env";
       '';
     };
 
@@ -115,6 +129,25 @@ in
       description = "VexBoard Dashboard";
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" "dbus.service" ];
+      preStart = ''
+        secret="''${VEXBOARD_AUTH__SECRET:-}"
+        if [ -z "$secret" ] || [ "$secret" = "change-me-in-production" ]; then
+          echo "" >&2
+          echo "ERROR: VexBoard will not start because no auth secret has been configured." >&2
+          echo "" >&2
+          echo "  1. Generate a secret:" >&2
+          echo "       openssl rand -base64 48" >&2
+          echo "" >&2
+          echo "  2. Write it to a root-owned file (mode 0400):" >&2
+          echo "       echo 'VEXBOARD_AUTH__SECRET=<generated>' > /etc/vexboard/secret.env" >&2
+          echo "       chmod 0400 /etc/vexboard/secret.env" >&2
+          echo "" >&2
+          echo "  3. Set in your NixOS configuration:" >&2
+          echo "       services.vexboard.secretFile = \"/etc/vexboard/secret.env\";" >&2
+          echo "" >&2
+          exit 1
+        fi
+      '';
       serviceConfig = {
         ExecStart = "${cfg.package}/bin/vexboard-server";
         StateDirectory = "vexboard";

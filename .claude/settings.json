@@ -8,17 +8,13 @@
       "Bash(git branch:*)",
       "Bash(git show:*)",
       "Bash(cargo fmt --all -- --check:*)",
-      "Bash(cargo clippy --workspace:*)",
+      "Bash(cargo clippy --workspace -- -D warnings:*)",
       "Bash(cargo test -p vexboard-server:*)",
       "Bash(cargo build --release --bin vexboard-server:*)",
       "Bash(cargo audit --ignore RUSTSEC-2023-0071:*)",
-      "Bash(bash scripts/preflight.sh:*)",
+      "Bash(powershell -File scripts/preflight.ps1:*)",
       "Bash(./scripts/preflight.sh:*)",
-      "Bash(find:*)",
-      "Bash(ls:*)",
-      "Bash(grep:*)",
-      "Bash(stat:*)",
-      "Bash(cat:*)"
+      "Bash(bash scripts/preflight.sh:*)"
     ],
     "deny": [
       "Bash(git add:*)",
