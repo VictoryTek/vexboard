@@ -158,7 +158,7 @@ in
         PrivateTmp = true;
         ProtectSystem = "strict";
         ReadWritePaths = [ cfg.dataDir ];
-        EnvironmentFiles = lib.optional (cfg.secretFile != null) cfg.secretFile;
+        EnvironmentFile = lib.optional (cfg.secretFile != null) cfg.secretFile;
       };
     };
 
