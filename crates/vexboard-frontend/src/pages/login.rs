@@ -49,24 +49,13 @@ pub fn LoginPage() -> impl IntoView {
         <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; gap:1.5rem; background-color:var(--color-bg-primary)">
             // Brand
             <div style="display:flex; flex-direction:column; align-items:center; gap:0.75rem">
-                <div style="
-                    width: 52px; height: 52px; border-radius: 14px;
-                    background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
-                    display: flex; align-items: center; justify-content: center;
-                    box-shadow: 0 0 28px rgba(99,102,241,0.5);
-                ">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white"
-                         stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="3" y="3" width="7" height="7" rx="1.5"/>
-                        <rect x="14" y="3" width="7" height="7" rx="1.5"/>
-                        <rect x="3" y="14" width="7" height="7" rx="1.5"/>
-                        <rect x="14" y="14" width="7" height="7" rx="1.5"/>
-                    </svg>
-                </div>
-                <div class="text-center">
-                    <h1 class="text-xl font-semibold tracking-tight"
-                        style="letter-spacing: -0.02em">"VexBoard"</h1>
-                    <p class="text-xs mt-0.5" style="color: var(--color-text-muted)">
+                <img src="/vexboard-logo.png" alt="VexBoard"
+                    style="width:52px; height:52px; border-radius:14px; object-fit:contain;" />
+                <div style="text-align:center;">
+                    <h1 style="font-size:1.25rem; font-weight:600; letter-spacing:-0.02em; margin:0;">
+                        "VexBoard"
+                    </h1>
+                    <p style="font-size:0.75rem; margin:0.25rem 0 0; color:var(--color-text-muted);">
                         "Sign in to your dashboard"
                     </p>
                 </div>
