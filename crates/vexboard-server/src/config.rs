@@ -24,10 +24,18 @@ pub struct ServerConfig {
     /// In production set this to your frontend URL, e.g. `["https://dashboard.example.com"]`.
     #[serde(default = "default_allowed_origins")]
     pub allowed_origins: Vec<String>,
+    /// Base URL for the selfhst/icons CDN used by the icon picker in the UI.
+    /// Override with your own selfhst/icons Docker instance URL for air-gapped deployments.
+    #[serde(default = "default_icon_cdn_base")]
+    pub icon_cdn_base: String,
 }
 
 fn default_allowed_origins() -> Vec<String> {
     vec!["*".to_string()]
+}
+
+fn default_icon_cdn_base() -> String {
+    "https://cdn.jsdelivr.net/gh/selfhst/icons@main".to_string()
 }
 
 #[derive(Debug, Clone, Deserialize)]

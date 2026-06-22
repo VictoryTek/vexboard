@@ -29,6 +29,7 @@ fn test_config() -> AppConfig {
             port: 0,
             assets_path: "assets".to_string(),
             allowed_origins: vec!["*".to_string()],
+            icon_cdn_base: "https://cdn.jsdelivr.net/gh/selfhst/icons@main".to_string(),
         },
         database: DatabaseConfig {
             path: PathBuf::from(":memory:"),

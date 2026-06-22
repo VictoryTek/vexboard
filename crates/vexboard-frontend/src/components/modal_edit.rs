@@ -1,6 +1,8 @@
 use leptos::either::Either;
 use leptos::prelude::*;
 
+use crate::components::icon_picker::IconPicker;
+
 fn extract_favicon_url(url: &str) -> Option<String> {
     let url = url.trim();
     if url.is_empty() {
@@ -142,6 +144,10 @@ pub fn EditModal(
                                     }
                                 />
                             </div>
+                            <IconPicker on_select=move |url: String| {
+                                set_icon_auto.set(false);
+                                set_icon.set(url);
+                            } />
                         </div>
                         // Group selector — only rendered when groups are available
                         {if !groups.is_empty() {

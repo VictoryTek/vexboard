@@ -1,4 +1,5 @@
 pub mod discovery_panel;
+pub mod icon_picker;
 pub mod metric_bar;
 pub mod modal_edit;
 pub mod modal_groups;

@@ -1,5 +1,6 @@
 pub mod audit;
 pub mod auth;
+pub mod config;
 pub mod groups;
 pub mod health;
 pub mod metrics;
@@ -36,12 +37,16 @@ pub fn router() -> Router<AppState> {
         .nest("/api/v1/users", users::router())
         .route_layer(middleware::from_fn(require_admin));
 
-    // Public routes: setup bootstrap, auth, health check, and OpenAPI docs.
+    // Public routes: setup bootstrap, auth, health check, public config, and OpenAPI docs.
     Router::new()
         .route("/api/v1/setup/status", axum::routing::get(setup::status))
         .route("/api/v1/setup", axum::routing::post(setup::create_admin))
         .nest("/api/v1/auth", auth::router())
         .route("/health", axum::routing::get(health::health_check))
+        .route(
+            "/api/v1/config/public",
+            axum::routing::get(config::public_config),
+        )
         .merge(
             SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", openapi::ApiDoc::openapi()),
         )

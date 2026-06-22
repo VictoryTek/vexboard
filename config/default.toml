@@ -7,6 +7,9 @@ assets_path = "embedded"
 # local-network deployments). In production, restrict to your frontend URL:
 #   allowed_origins = ["https://dashboard.example.com"]
 allowed_origins = ["*"]
+# Base URL for the selfhst/icons CDN used by the icon picker.
+# Override with your own selfhst/icons Docker instance URL for air-gapped deployments.
+# icon_cdn_base = "https://cdn.jsdelivr.net/gh/selfhst/icons@main"
 
 [database]
 path = "/var/lib/vexboard/vexboard.db"

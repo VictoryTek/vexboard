@@ -1,6 +1,8 @@
 use leptos::either::Either;
 use leptos::prelude::*;
 
+use crate::components::icon_picker::IconPicker;
+
 #[derive(Debug, Clone)]
 pub struct QuickLinkFormData {
     pub title: String,
@@ -126,6 +128,10 @@ pub fn QuickLinkModal(
                                     }
                                 />
                             </div>
+                            <IconPicker on_select=move |url: String| {
+                                set_icon_auto.set(false);
+                                set_icon.set(url);
+                            } />
                         </div>
                     </div>
                     <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.5rem;">
