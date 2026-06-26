@@ -50,12 +50,12 @@ pub fn LoginPage() -> impl IntoView {
             // Brand
             <div style="display:flex; flex-direction:column; align-items:center; gap:0.75rem">
                 <img src="/vexboard-logo.png" alt="VexBoard"
-                    style="width:80px; height:80px; border-radius:18px; object-fit:contain;" />
+                    style="width:140px; height:140px; border-radius:28px; object-fit:contain;" />
                 <div style="text-align:center;">
-                    <h1 style="font-size:1.75rem; font-weight:600; letter-spacing:-0.02em; margin:0;">
+                    <h1 style="font-size:2.75rem; font-weight:700; letter-spacing:-0.02em; margin:0; text-align:center;">
                         "VexBoard"
                     </h1>
-                    <p style="font-size:0.875rem; margin:0.25rem 0 0; color:var(--color-text-muted);">
+                    <p style="font-size:0.875rem; margin:0.25rem 0 0; color:var(--color-text-muted); text-align:center;">
                         "Sign in to your dashboard"
                     </p>
                 </div>
