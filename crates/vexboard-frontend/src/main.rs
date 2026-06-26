@@ -40,33 +40,6 @@ fn App() -> impl IntoView {
     provide_context(sidebar_mode);
     provide_context(set_sidebar_mode);
 
-    // First-run guard: redirect to /setup if no users exist yet
-    #[cfg(target_arch = "wasm32")]
-    Effect::new(move |_| {
-        spawn_local(async move {
-            let current_path = web_sys::window()
-                .and_then(|w| w.location().pathname().ok())
-                .unwrap_or_default();
-            if current_path == "/setup" || current_path == "/login" {
-                return;
-            }
-            if let Ok(resp) = gloo_net::http::Request::get("/api/v1/setup/status")
-                .send()
-                .await
-            {
-                if let Ok(body) = resp.json::<serde_json::Value>().await {
-                    if body["needs_setup"].as_bool().unwrap_or(false) {
-                        web_sys::window()
-                            .unwrap()
-                            .location()
-                            .set_href("/setup")
-                            .ok();
-                    }
-                }
-            }
-        });
-    });
-
     view! {
         <Router>
             <Routes fallback=|| view! { <p>"Page not found"</p> }>
@@ -96,10 +69,23 @@ fn MainLayout() -> impl IntoView {
         spawn_local(async move {
             if let Ok(resp) = gloo_net::http::Request::get("/api/v1/auth/me").send().await {
                 if resp.status() == 401 {
+                    // Avoid a race: check setup status before deciding where to redirect.
+                    // Without this, the auth 401 could send the user to /login before the
+                    // first-run setup has been completed.
+                    let needs_setup = async {
+                        let r = gloo_net::http::Request::get("/api/v1/setup/status")
+                            .send()
+                            .await
+                            .ok()?;
+                        let body = r.json::<serde_json::Value>().await.ok()?;
+                        body["needs_setup"].as_bool()
+                    }
+                    .await
+                    .unwrap_or(false);
                     web_sys::window()
                         .unwrap()
                         .location()
-                        .set_href("/login")
+                        .set_href(if needs_setup { "/setup" } else { "/login" })
                         .ok();
                     return;
                 }
