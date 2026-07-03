@@ -29,6 +29,7 @@ pub fn QuickLinkCard(
         icon_opt.clone().unwrap_or(letter)
     };
     let icon_url = if is_url_icon { icon_opt } else { None };
+    let img_failed = RwSignal::new(false);
 
     let url = link.url.clone();
     let description = link.description.clone().filter(|d| !d.trim().is_empty());
@@ -44,21 +45,16 @@ pub fn QuickLinkCard(
             onmouseout="this.style.borderColor=''"
         >
             <div style="display:flex; align-items:center; gap:0.75rem; min-width:0;">
-                <div class="service-icon" style="position:relative; flex-shrink:0;">
-                    <span>{icon_text}</span>
-                    {icon_url.map(|src| view! {
-                        <img src={src} alt=""
-                            style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;border-radius:inherit;padding:3px;"
-                            on:error=move |ev| {
-                                use wasm_bindgen::JsCast;
-                                if let Some(t) = ev.target() {
-                                    if let Ok(el) = t.dyn_into::<web_sys::HtmlElement>() {
-                                        let _ = el.style().set_property("display", "none");
-                                    }
-                                }
-                            }
-                        />
-                    })}
+                <div class="service-icon" style="flex-shrink:0;">
+                    {move || match (icon_url.clone(), img_failed.get()) {
+                        (Some(src), false) => view! {
+                            <img src={src} alt=""
+                                style="width:100%;height:100%;object-fit:contain;border-radius:inherit;padding:3px;"
+                                on:error=move |_| img_failed.set(true)
+                            />
+                        }.into_any(),
+                        _ => view! { <span>{icon_text.clone()}</span> }.into_any(),
+                    }}
                 </div>
                 <div style="min-width:0; flex:1;">
                     <p style="font-size:0.9rem; font-weight:600; color:var(--color-text-primary); \
