@@ -172,7 +172,16 @@ pub(crate) async fn create_service(
                 .await
                 {
                     let timeout = Duration::from_secs(timeout_secs);
-                    if svc.systemd_unit.is_some() {
+                    // Docker/Podman discoveries store the container name in
+                    // `systemd_unit`, not a real systemd unit — only trust it as a
+                    // D-Bus lookup key when the service wasn't discovered that way.
+                    let use_systemd = svc.systemd_unit.is_some()
+                        && !matches!(
+                            svc.discovery_source.as_deref(),
+                            Some("docker") | Some("podman")
+                        );
+
+                    if use_systemd {
                         probe::uptime::probe_systemd_unit(&probe_db, &svc, max_history, &probe_tx)
                             .await;
                     } else if svc.url.is_some() {

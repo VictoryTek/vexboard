@@ -36,7 +36,16 @@ pub async fn start_probe_loop(
                 let max_history = config.max_history;
 
                 tokio::spawn(async move {
-                    if svc.systemd_unit.is_some() {
+                    // Docker/Podman discoveries store the container name in
+                    // `systemd_unit`, not a real systemd unit — only trust it as a
+                    // D-Bus lookup key when the service wasn't discovered that way.
+                    let use_systemd = svc.systemd_unit.is_some()
+                        && !matches!(
+                            svc.discovery_source.as_deref(),
+                            Some("docker") | Some("podman")
+                        );
+
+                    if use_systemd {
                         uptime::probe_systemd_unit(&db, &svc, max_history, &tx).await;
                     } else if svc.url.is_some() {
                         uptime::probe_service(&db, &svc, timeout, max_history, &tx).await;
