@@ -1,10 +1,15 @@
-use axum::{extract::State, http::StatusCode, Json};
+#[cfg(not(feature = "pam-auth"))]
+use axum::extract::State;
+use axum::{http::StatusCode, Json};
 use serde::Deserialize;
 use serde_json::json;
 
+#[cfg(not(feature = "pam-auth"))]
 use crate::db;
+#[cfg(not(feature = "pam-auth"))]
 use crate::AppState;
 
+#[cfg_attr(feature = "pam-auth", allow(dead_code))]
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct SetupRequest {
     pub username: String,

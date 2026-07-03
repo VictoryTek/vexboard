@@ -30,6 +30,7 @@ pub struct Service {
     pub updated_at: Option<NaiveDateTime>,
 }
 
+#[cfg(not(all(unix, feature = "pam-auth")))]
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct User {
     pub id: i64,

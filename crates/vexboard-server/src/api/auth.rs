@@ -34,6 +34,7 @@ fn client_ip(connect_info: &ConnectInfo<SocketAddr>, headers: &HeaderMap) -> IpA
     connect_info.0.ip()
 }
 
+#[cfg(not(all(unix, feature = "pam-auth")))]
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub(crate) struct UpdateMeRequest {
     current_password: String,
