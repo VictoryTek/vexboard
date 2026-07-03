@@ -63,18 +63,25 @@ pub async fn probe_service(
 
     let start = Instant::now();
 
-    // Try HEAD first; if it fails for any reason, fall back to GET.
-    let (status, latency_ms) = match client.head(&url).send().await {
-        Ok(resp) => {
-            let latency = start.elapsed().as_millis() as i64;
-            if resp.status().is_success() || resp.status().is_redirection() {
-                ("up".to_string(), Some(latency))
-            } else {
-                ("down".to_string(), Some(latency))
-            }
+    // Try HEAD first; fall back to GET whenever HEAD doesn't come back up
+    // (request error, or a non-success status — many servers don't implement
+    // HEAD and would otherwise be misreported as down).
+    let head_outcome = client.head(&url).send().await;
+    let (status, latency_ms) = match head_outcome {
+        Ok(resp) if resp.status().is_success() || resp.status().is_redirection() => {
+            ("up".to_string(), Some(start.elapsed().as_millis() as i64))
         }
-        Err(_) => {
-            // HEAD failed — fall back to GET.
+        other => {
+            match &other {
+                Ok(resp) => tracing::debug!(
+                    url = %url, status = %resp.status(),
+                    "HEAD probe returned non-success status, falling back to GET"
+                ),
+                Err(e) => tracing::debug!(
+                    url = %url, error = %e,
+                    "HEAD probe request failed, falling back to GET"
+                ),
+            }
             let start2 = Instant::now();
             match client.get(&url).send().await {
                 Ok(resp) => {
@@ -82,10 +89,17 @@ pub async fn probe_service(
                     if resp.status().is_success() || resp.status().is_redirection() {
                         ("up".to_string(), Some(latency))
                     } else {
+                        tracing::warn!(
+                            url = %url, status = %resp.status(),
+                            "GET probe returned non-success status, marking service down"
+                        );
                         ("down".to_string(), Some(latency))
                     }
                 }
-                Err(_) => ("down".to_string(), None),
+                Err(e) => {
+                    tracing::warn!(url = %url, error = %e, "GET probe failed, marking service down");
+                    ("down".to_string(), None)
+                }
             }
         }
     };
