@@ -5,6 +5,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+#[cfg(not(all(unix, feature = "pam-auth")))]
 use serde::Deserialize;
 use serde_json::json;
 use std::net::{IpAddr, SocketAddr};
