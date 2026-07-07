@@ -15,12 +15,17 @@ mod tests;
 #[cfg(all(unix, feature = "pam-auth"))]
 mod pam_auth;
 
+use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use axum::http::HeaderValue;
+use axum::body::Body;
+use axum::extract::Request;
+use axum::http::{header, HeaderValue, StatusCode};
+use axum::response::Response;
 use sqlx::SqlitePool;
 use tokio::sync::broadcast;
+use tower::ServiceExt;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
 use tower_sessions::SessionManagerLayer;
@@ -28,6 +33,80 @@ use tower_sessions::SessionManagerLayer;
 use crate::config::AppConfig;
 use crate::discovery::DiscoveryList;
 use crate::metrics::system::SystemSnapshot;
+
+/// Returns true if the last path segment contains a `.` (looks like an asset
+/// request rather than a client-side route).
+fn has_extension(path: &str) -> bool {
+    path.rsplit('/').next().is_some_and(|f| f.contains('.'))
+}
+
+/// Returns true if the filename looks like a Trunk content-hashed asset, i.e.
+/// `<name>-<hash>.<ext>` or `<name>-<hash>_bg.wasm`, where `<hash>` is at least
+/// 8 lowercase hex characters. Such filenames are safe to cache forever since
+/// any content change produces a new filename.
+fn is_hashed_asset(path: &str) -> bool {
+    let Some(file_name) = path.rsplit('/').next().filter(|f| !f.is_empty()) else {
+        return false;
+    };
+    let stem = file_name.split('.').next().unwrap_or(file_name);
+    let stem = stem.strip_suffix("_bg").unwrap_or(stem);
+    match stem.rsplit_once('-') {
+        Some((_, hash)) => hash.len() >= 8 && hash.chars().all(|c| c.is_ascii_hexdigit()),
+        None => false,
+    }
+}
+
+/// Serves the frontend bundle from `assets_root`, distinguishing between
+/// genuinely missing assets (404), client-side routes (served `index.html`,
+/// never cached without revalidation), and content-hashed build artifacts
+/// (cached forever, since their filename changes whenever their content does).
+async fn spa_asset_service(
+    assets_root: String,
+    req: Request<Body>,
+) -> Result<Response, Infallible> {
+    let path = req.uri().path().to_string();
+
+    let resp = ServeDir::new(&assets_root)
+        .oneshot(req)
+        .await
+        .expect("ServeDir is infallible")
+        .map(Body::new);
+
+    if resp.status() == StatusCode::NOT_FOUND {
+        if has_extension(&path) {
+            // Genuinely missing asset — preserve the 404.
+            return Ok(resp);
+        }
+
+        let index_req = Request::builder()
+            .method("GET")
+            .uri("/index.html")
+            .body(Body::empty())
+            .expect("static index.html request is well-formed");
+        let mut fallback = ServeFile::new(format!("{}/index.html", assets_root))
+            .oneshot(index_req)
+            .await
+            .expect("ServeFile is infallible")
+            .map(Body::new);
+        fallback.headers_mut().insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("no-cache, must-revalidate"),
+        );
+        return Ok(fallback);
+    }
+
+    let mut resp = resp;
+    let cache_control = if is_hashed_asset(&path) {
+        "public, max-age=31536000, immutable"
+    } else {
+        "no-cache, must-revalidate"
+    };
+    resp.headers_mut().insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static(cache_control),
+    );
+    Ok(resp)
+}
 
 /// Shared application state available to all handlers.
 #[derive(Clone)]
@@ -138,9 +217,9 @@ async fn main() -> anyhow::Result<()> {
     } else {
         "assets".to_string()
     };
-    let app = app.fallback_service(
-        ServeDir::new(&assets_root).fallback(ServeFile::new(format!("{}/index.html", assets_root))),
-    );
+    let app = app.fallback_service(tower::service_fn(move |req| {
+        spa_asset_service(assets_root.clone(), req)
+    }));
 
     let cors_layer = if config.server.allowed_origins.iter().any(|o| o == "*") {
         CorsLayer::new()

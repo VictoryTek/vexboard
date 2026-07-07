@@ -1,6 +1,6 @@
 [package]
 name = "vexboard-server"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 description = "VexBoard — self-hosted server dashboard backend"
 
