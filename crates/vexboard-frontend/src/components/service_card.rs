@@ -55,7 +55,7 @@ pub fn ServiceCard(
             "docker" => Some(("Docker".to_string(), "#0db7ed".to_string())),
             "podman" => Some(("Podman".to_string(), "#892ca0".to_string())),
             "systemd" => Some(("Systemd".to_string(), "#e8873a".to_string())),
-            _ => None,
+            _ => Some(("Remote".to_string(), "#5b8def".to_string())),
         }
     } else if service
         .systemd_unit
@@ -65,7 +65,7 @@ pub fn ServiceCard(
     {
         Some(("Systemd".to_string(), "#e8873a".to_string()))
     } else {
-        None
+        Some(("Remote".to_string(), "#5b8def".to_string()))
     };
 
     let summary = service
