@@ -3,10 +3,11 @@
 
 let
   src = lib.cleanSource ./..;
+  cargoToml = builtins.fromTOML (builtins.readFile ../Cargo.toml);
 in
 rustPlatform.buildRustPackage {
   pname = "vexboard";
-  version = "0.1.0";
+  version = cargoToml.workspace.package.version;
   inherit src;
 
   cargoLock = {

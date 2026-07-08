@@ -18,7 +18,7 @@ impl Modify for SecurityAddon {
 #[openapi(
     info(
         title = "VexBoard API",
-        version = "0.1.0",
+        version = env!("CARGO_PKG_VERSION"),
         description = "Self-hosted server dashboard REST API",
         license(name = "MIT"),
         contact(name = "VexBoard", email = "victorytech@proton.me"),

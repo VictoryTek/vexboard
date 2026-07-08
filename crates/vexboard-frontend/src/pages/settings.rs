@@ -196,7 +196,7 @@ pub fn SettingsPage() -> impl IntoView {
                         "About"
                     </div>
                     <p class="text-xs" style="color: var(--color-text-muted)">
-                        "VexBoard v0.1.0 — Self-hosted server dashboard for NixOS and systemd."
+                        {concat!("VexBoard v", env!("CARGO_PKG_VERSION"), " — Self-hosted server dashboard for NixOS and systemd.")}
                     </p>
                 </div>
 
