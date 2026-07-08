@@ -32,7 +32,7 @@ Legend: `[BUG]` = incorrect/broken behavior · `[SEC]` = security impact · `[AR
   **Fix:** Pass `initial.probe_enabled` and `initial.probe_interval` through to the save payload instead of hardcoding.
   *Files:* `src/components/modal_edit.rs:188-197`
 
-- [ ] **BUG-2 — Role `<select>` uses wrong DOM cast — new users always created as viewer** *(B-H6)*
+- [x] **BUG-2 — Role `<select>` uses wrong DOM cast — new users always created as viewer** *(B-H6)*
   The `on:change` handler casts the `<select>` element as `HtmlInputElement`; `dyn_into` always fails silently so `new_role` stays `"viewer"` regardless of what the admin selects. The "Admin" option is inert.
   **Fix:** Cast to `HtmlSelectElement` and enable the `HtmlSelectElement` web-sys feature. Read `.value()` from it.
   *Files:* `src/pages/settings.rs:330-342`, `crates/vexboard-frontend/Cargo.toml`

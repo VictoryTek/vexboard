@@ -332,7 +332,7 @@ pub fn SettingsPage() -> impl IntoView {
                                     style="flex:0 0 auto;"
                                     on:change=move |ev| {
                                         use wasm_bindgen::JsCast;
-                                        if let Some(el) = ev.target().and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok()) {
+                                        if let Some(el) = ev.target().and_then(|t| t.dyn_into::<web_sys::HtmlSelectElement>().ok()) {
                                             set_new_role.set(el.value());
                                         }
                                     }
