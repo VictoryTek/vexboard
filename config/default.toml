@@ -25,6 +25,15 @@ secure_cookies = false
 # Set login_rate_limit_attempts to 0 to disable.
 login_rate_limit_attempts = 10
 login_rate_limit_window_secs = 60
+# Authentication mode:
+#   "session" (default) — login required; safe for any network exposure.
+#   "none" — all API routes open, no login required. Only safe when the
+#     network layer itself restricts access (e.g. Tailscale-only, isolated
+#     LAN with no untrusted devices). To re-enable login, set this back to
+#     "session" (or delete the line / unset VEXBOARD_AUTH__MODE) and
+#     restart the server — existing user accounts are untouched by mode
+#     changes in either direction, so no re-setup is needed.
+mode = "session"
 
 [discovery]
 enabled = true

@@ -40,6 +40,7 @@ fn test_config() -> AppConfig {
             secure_cookies: false,
             login_rate_limit_attempts: 0,
             login_rate_limit_window_secs: 60,
+            mode: "session".to_string(),
         },
         discovery: DiscoveryConfig {
             enabled: false,
@@ -89,7 +90,9 @@ impl TestApp {
 
         let session_store = MemoryStore::default();
         let session_layer = SessionManagerLayer::new(session_store).with_secure(false);
-        let app = crate::api::router().with_state(state).layer(session_layer);
+        let app = crate::api::router("session")
+            .with_state(state)
+            .layer(session_layer);
 
         TestApp { pool, app }
     }

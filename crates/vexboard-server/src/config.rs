@@ -58,6 +58,11 @@ pub struct AuthConfig {
     /// Sliding window duration in seconds for the login rate limiter.
     #[serde(default = "default_login_rate_limit_window_secs")]
     pub login_rate_limit_window_secs: u64,
+    /// Authentication mode: "session" (default, login required) or "none"
+    /// (all API routes open — only safe when the network layer itself
+    /// restricts access, e.g. Tailscale-only or an isolated LAN).
+    #[serde(default = "default_auth_mode")]
+    pub mode: String,
 }
 
 fn default_login_rate_limit_attempts() -> u32 {
@@ -66,6 +71,10 @@ fn default_login_rate_limit_attempts() -> u32 {
 
 fn default_login_rate_limit_window_secs() -> u64 {
     60
+}
+
+fn default_auth_mode() -> String {
+    "session".to_string()
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -164,6 +173,13 @@ impl AppConfig {
 
         let cfg = builder.build()?;
         let app_config: AppConfig = cfg.try_deserialize()?;
+        match app_config.auth.mode.as_str() {
+            "session" | "none" => {}
+            other => anyhow::bail!(
+                "invalid auth.mode {:?}: expected \"session\" or \"none\"",
+                other
+            ),
+        }
         Ok(app_config)
     }
 }

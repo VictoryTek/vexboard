@@ -208,7 +208,14 @@ async fn main() -> anyhow::Result<()> {
     let session_layer =
         SessionManagerLayer::new(session_store).with_secure(config.auth.secure_cookies);
 
-    let app = api::router().with_state(state).layer(session_layer);
+    if config.auth.mode == "none" {
+        tracing::warn!(
+            "auth.mode = \"none\": all API routes are unauthenticated; only use this if the network layer restricts access"
+        );
+    }
+    let app = api::router(&config.auth.mode)
+        .with_state(state)
+        .layer(session_layer);
 
     // Serve static assets — fall back to index.html for any unmatched path so
     // that the Leptos client-side router handles routes like /setup and /login.

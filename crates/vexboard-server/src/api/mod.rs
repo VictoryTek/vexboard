@@ -18,15 +18,26 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 /// Build the complete API router under `/api/v1`.
-pub fn router() -> Router<AppState> {
+///
+/// `auth_mode` mirrors `config::AuthConfig::mode`: `"none"` skips the
+/// `require_auth`/`require_admin` layers entirely (only safe when the
+/// network layer itself restricts access); any other value (normally
+/// `"session"`) applies them as usual.
+pub fn router(auth_mode: &str) -> Router<AppState> {
+    let auth_disabled = auth_mode == "none";
+
     // Read-only routes: viewer and admin.
     let viewer_protected = Router::new()
         .nest("/api/v1/services", services::read_router())
         .nest("/api/v1/groups", groups::read_router())
         .nest("/api/v1/quick-links", quick_links::read_router())
         .nest("/api/v1/metrics", metrics::router())
-        .nest("/api/v1/audit", audit::router())
-        .route_layer(middleware::from_fn(require_auth));
+        .nest("/api/v1/audit", audit::router());
+    let viewer_protected = if auth_disabled {
+        viewer_protected
+    } else {
+        viewer_protected.route_layer(middleware::from_fn(require_auth))
+    };
 
     // Mutating routes: admin only.
     let admin_protected = Router::new()
@@ -34,8 +45,12 @@ pub fn router() -> Router<AppState> {
         .nest("/api/v1/groups", groups::admin_router())
         .nest("/api/v1/quick-links", quick_links::admin_router())
         .nest("/api/v1/discovery", crate::discovery::router())
-        .nest("/api/v1/users", users::router())
-        .route_layer(middleware::from_fn(require_admin));
+        .nest("/api/v1/users", users::router());
+    let admin_protected = if auth_disabled {
+        admin_protected
+    } else {
+        admin_protected.route_layer(middleware::from_fn(require_admin))
+    };
 
     // Public routes: setup bootstrap, auth, health check, public config, and OpenAPI docs.
     Router::new()
