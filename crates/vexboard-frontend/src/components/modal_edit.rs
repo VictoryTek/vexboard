@@ -54,6 +54,8 @@ pub fn EditModal(
         probe_enabled: true,
         probe_interval: 30,
     });
+    let initial_probe_enabled = initial.probe_enabled;
+    let initial_probe_interval = initial.probe_interval;
 
     let (name, set_name) = signal(initial.display_name);
     let (desc, set_desc) = signal(initial.description);
@@ -198,8 +200,8 @@ pub fn EditModal(
                                 url: url.get(),
                                 icon: icon.get(),
                                 group_id: selected_group_id.get(),
-                                probe_enabled: true,
-                                probe_interval: 30,
+                                probe_enabled: initial_probe_enabled,
+                                probe_interval: initial_probe_interval,
                             });
                         }>
                             "Save"

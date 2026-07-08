@@ -27,7 +27,7 @@ Legend: `[BUG]` = incorrect/broken behavior · `[SEC]` = security impact · `[AR
 
 ### Data Loss / Functional Breakage
 
-- [ ] **BUG-1 — Edit Service modal silently resets probe settings on every save** *(B-H3, A-H1)*
+- [x] **BUG-1 — Edit Service modal silently resets probe settings on every save** *(B-H3, A-H1)*
   The modal receives the service's real `probe_enabled`/`probe_interval` but the Save handler hardcodes `probe_enabled: true, probe_interval: 30`. Editing anything (rename, icon, URL) re-enables probing on a disabled service and resets custom intervals. No probing UI exists in the modal so users cannot see this happening.
   **Fix:** Pass `initial.probe_enabled` and `initial.probe_interval` through to the save payload instead of hardcoding.
   *Files:* `src/components/modal_edit.rs:188-197`
