@@ -41,6 +41,7 @@ fn test_config() -> AppConfig {
             login_rate_limit_attempts: 0,
             login_rate_limit_window_secs: 60,
             mode: "session".to_string(),
+            behind_proxy: false,
         },
         discovery: DiscoveryConfig {
             enabled: false,

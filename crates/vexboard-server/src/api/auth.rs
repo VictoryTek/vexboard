@@ -22,15 +22,23 @@ pub fn router() -> Router<AppState> {
         .route("/me", get(me).patch(update_me))
 }
 
-/// Extract the client IP from ConnectInfo, falling back to X-Forwarded-For.
-fn client_ip(connect_info: &ConnectInfo<SocketAddr>, headers: &HeaderMap) -> IpAddr {
-    if let Some(forwarded) = headers
-        .get("x-forwarded-for")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.split(',').next())
-        .and_then(|s| s.trim().parse::<IpAddr>().ok())
-    {
-        return forwarded;
+/// Extract the client IP from ConnectInfo, honoring X-Forwarded-For's last hop
+/// only when `behind_proxy` is set — the header is fully client-controlled
+/// otherwise and must not be trusted.
+fn client_ip(
+    connect_info: &ConnectInfo<SocketAddr>,
+    headers: &HeaderMap,
+    behind_proxy: bool,
+) -> IpAddr {
+    if behind_proxy {
+        if let Some(forwarded) = headers
+            .get("x-forwarded-for")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.rsplit(',').next())
+            .and_then(|s| s.trim().parse::<IpAddr>().ok())
+        {
+            return forwarded;
+        }
     }
     connect_info.0.ip()
 }
@@ -67,7 +75,7 @@ pub(crate) async fn login(
     session: Session,
     Json(payload): Json<LoginRequest>,
 ) -> impl IntoResponse {
-    let ip = client_ip(&connect_info, &headers);
+    let ip = client_ip(&connect_info, &headers, state.config.auth.behind_proxy);
     let ip_str = ip.to_string();
     if state.config.auth.login_rate_limit_attempts > 0 && !state.login_limiter.check(ip) {
         return (
@@ -453,4 +461,39 @@ pub(crate) async fn update_me(
     session.flush().await.ok();
 
     (StatusCode::OK, Json(json!({"ok": true})))
+}
+
+#[cfg(test)]
+mod client_ip_tests {
+    use super::*;
+
+    fn connect_info() -> ConnectInfo<SocketAddr> {
+        ConnectInfo("203.0.113.9:1234".parse().unwrap())
+    }
+
+    #[test]
+    fn ignores_xff_when_not_behind_proxy() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-for", "198.51.100.1".parse().unwrap());
+        let ip = client_ip(&connect_info(), &headers, false);
+        assert_eq!(ip.to_string(), "203.0.113.9");
+    }
+
+    #[test]
+    fn uses_last_hop_of_xff_when_behind_proxy() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-forwarded-for",
+            "198.51.100.1, 203.0.113.5".parse().unwrap(),
+        );
+        let ip = client_ip(&connect_info(), &headers, true);
+        assert_eq!(ip.to_string(), "203.0.113.5");
+    }
+
+    #[test]
+    fn falls_back_to_socket_addr_when_behind_proxy_but_no_xff() {
+        let headers = HeaderMap::new();
+        let ip = client_ip(&connect_info(), &headers, true);
+        assert_eq!(ip.to_string(), "203.0.113.9");
+    }
 }

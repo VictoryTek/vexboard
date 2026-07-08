@@ -20,7 +20,7 @@ Legend: `[BUG]` = incorrect/broken behavior · `[SEC]` = security impact · `[AR
   **Fix:** Wire `session_ttl_hours` into `SessionManagerLayer::with_expiry(Expiry::OnInactivity(...))`. On role change, rename, or delete — delete the target user's rows from `tower_sessions`. Fix the Nix preStart guard to only gate on options that actually do something.
   *Files:* `src/config.rs:40-41`, `src/main.rs:127-130`, `src/session_store.rs`, `src/middleware/auth.rs:20-38`, `src/api/users.rs:182-305,325-413`, `nix/module.nix:68-91,132-150`
 
-- [ ] **SEC-2 — X-Forwarded-For trusted unconditionally — rate limit trivially bypassable** *(B-H1, A-A7)*
+- [x] **SEC-2 — X-Forwarded-For trusted unconditionally — rate limit trivially bypassable** *(B-H1, A-A7)*
   `client_ip()` prefers the first client-supplied XFF header entry over the real socket address. Any client can send a fresh random IP per request to bypass the rate limiter entirely. The `LoginRateLimiter` HashMap is never evicted, so spoofing unique IPs grows memory unboundedly. Spoofed IPs are also written to the audit log.
   **Fix:** Add `auth.behind_proxy = false` config flag. Only honor XFF (last hop, not first) when enabled. Evict empty `VecDeque`s from the rate limiter map.
   *Files:* `src/api/auth.rs:24-35`, `src/rate_limit.rs`

@@ -63,6 +63,12 @@ pub struct AuthConfig {
     /// restricts access, e.g. Tailscale-only or an isolated LAN).
     #[serde(default = "default_auth_mode")]
     pub mode: String,
+    /// Set to true when the server sits behind a reverse proxy that sets
+    /// X-Forwarded-For. When false (default), the header is ignored entirely and
+    /// the real socket address is always used — client-supplied X-Forwarded-For
+    /// values are otherwise fully spoofable and would defeat the login rate limiter.
+    #[serde(default)]
+    pub behind_proxy: bool,
 }
 
 fn default_login_rate_limit_attempts() -> u32 {

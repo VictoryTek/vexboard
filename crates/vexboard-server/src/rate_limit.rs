@@ -30,10 +30,47 @@ impl LoginRateLimiter {
         while attempts.front().is_some_and(|t| *t < cutoff) {
             attempts.pop_front();
         }
-        if attempts.len() as u32 >= self.max_attempts {
-            return false;
+        let allowed = (attempts.len() as u32) < self.max_attempts;
+        if allowed {
+            attempts.push_back(now);
         }
-        attempts.push_back(now);
-        true
+        if attempts.is_empty() {
+            state.remove(&ip);
+        }
+        allowed
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn blocks_after_max_attempts_within_window() {
+        let limiter = LoginRateLimiter::new(2, 60);
+        let ip: IpAddr = "127.0.0.1".parse().unwrap();
+        assert!(limiter.check(ip));
+        assert!(limiter.check(ip));
+        assert!(!limiter.check(ip));
+    }
+
+    #[test]
+    fn distinct_ips_have_independent_budgets() {
+        let limiter = LoginRateLimiter::new(1, 60);
+        let a: IpAddr = "127.0.0.1".parse().unwrap();
+        let b: IpAddr = "127.0.0.2".parse().unwrap();
+        assert!(limiter.check(a));
+        assert!(!limiter.check(a));
+        assert!(limiter.check(b));
+    }
+
+    #[test]
+    fn rate_limited_call_with_no_prior_attempts_prunes_empty_entry() {
+        // max_attempts = 0 means every call is immediately rate-limited with an
+        // empty deque; the entry must not linger in the map afterward.
+        let limiter = LoginRateLimiter::new(0, 60);
+        let ip: IpAddr = "127.0.0.1".parse().unwrap();
+        assert!(!limiter.check(ip));
+        assert!(!limiter.state.lock().unwrap().contains_key(&ip));
     }
 }
