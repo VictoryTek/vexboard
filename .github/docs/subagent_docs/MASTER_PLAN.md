@@ -15,7 +15,7 @@ Legend: `[BUG]` = incorrect/broken behavior · `[SEC]` = security impact · `[AR
 
 ### Security
 
-- [ ] **SEC-1 — Sessions never expire; role/deletion changes don't invalidate live sessions** *(B-H2, B-H4, A-A1, A-A2)*
+- [x] **SEC-1 — Sessions never expire; role/deletion changes don't invalidate live sessions** *(B-H2, B-H4, A-A1, A-A2)*
   `auth.secret` and `session_ttl_hours` are deserialized and never read. `SessionManagerLayer` is built without `.with_expiry(...)`, so the configured 7-day TTL has no effect. Demoting or deleting a user has no effect on their active sessions — they retain full (possibly admin) access until they voluntarily log out. The NixOS module enforces a `secretFile` workflow for a secret the server never uses (security theater).
   **Fix:** Wire `session_ttl_hours` into `SessionManagerLayer::with_expiry(Expiry::OnInactivity(...))`. On role change, rename, or delete — delete the target user's rows from `tower_sessions`. Fix the Nix preStart guard to only gate on options that actually do something.
   *Files:* `src/config.rs:40-41`, `src/main.rs:127-130`, `src/session_store.rs`, `src/middleware/auth.rs:20-38`, `src/api/users.rs:182-305,325-413`, `nix/module.nix:68-91,132-150`

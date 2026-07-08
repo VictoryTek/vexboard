@@ -180,6 +180,12 @@ impl AppConfig {
                 other
             ),
         }
+        if app_config.auth.mode == "session" && app_config.auth.secret.len() < 32 {
+            anyhow::bail!(
+                "auth.secret must be at least 32 bytes (got {}); generate one with `openssl rand -base64 48`",
+                app_config.auth.secret.len()
+            );
+        }
         Ok(app_config)
     }
 }

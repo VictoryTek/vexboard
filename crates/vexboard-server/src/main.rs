@@ -117,6 +117,7 @@ pub struct AppState {
     pub metrics_tx: broadcast::Sender<SystemSnapshot>,
     pub probe_tx: broadcast::Sender<probe::uptime::ProbeEvent>,
     pub login_limiter: Arc<rate_limit::LoginRateLimiter>,
+    pub session_store: session_store::SqliteSessionStore,
 }
 
 #[tokio::main]
@@ -154,6 +155,10 @@ async fn main() -> anyhow::Result<()> {
         config.auth.login_rate_limit_window_secs,
     ));
 
+    // SQLite-backed session store so sessions survive restarts.
+    let session_store = session_store::SqliteSessionStore::new(db.clone());
+    session_store.migrate().await?;
+
     // Build application state
     let state = AppState {
         db: db.clone(),
@@ -162,6 +167,7 @@ async fn main() -> anyhow::Result<()> {
         metrics_tx: metrics_tx.clone(),
         probe_tx: probe_tx.clone(),
         login_limiter,
+        session_store: session_store.clone(),
     };
 
     // Spawn background tasks
@@ -202,11 +208,21 @@ async fn main() -> anyhow::Result<()> {
         notify::notification_loop(notify_rx, notify_config, notify_client).await;
     });
 
-    // Build router — use a SQLite-backed session store so sessions survive restarts.
-    let session_store = session_store::SqliteSessionStore::new(db.clone());
-    session_store.migrate().await?;
-    let session_layer =
-        SessionManagerLayer::new(session_store).with_secure(config.auth.secure_cookies);
+    // Build router.
+    // `AppConfig::load()` only enforces the 32-byte minimum when auth.mode == "session";
+    // `auth.mode == "none"` deployments never exercise login, so fall back to a random,
+    // ephemeral key rather than panicking on a short/default secret.
+    let session_key = if config.auth.secret.len() >= 32 {
+        tower_sessions::cookie::Key::derive_from(config.auth.secret.as_bytes())
+    } else {
+        tower_sessions::cookie::Key::generate()
+    };
+    let session_layer = SessionManagerLayer::new(session_store)
+        .with_secure(config.auth.secure_cookies)
+        .with_expiry(tower_sessions::Expiry::OnInactivity(
+            time::Duration::seconds(config.auth.session_ttl_hours as i64 * 3600),
+        ))
+        .with_signed(session_key);
 
     if config.auth.mode == "none" {
         tracing::warn!(

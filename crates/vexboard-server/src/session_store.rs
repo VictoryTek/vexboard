@@ -35,6 +35,35 @@ impl SqliteSessionStore {
         .await?;
         Ok(())
     }
+
+    /// Delete every live session belonging to `username`. Used to revoke access
+    /// immediately after an admin changes a user's role/username or deletes them.
+    pub async fn delete_by_username(&self, username: &str) -> Result<(), sqlx::Error> {
+        let rows = sqlx::query("SELECT id, data FROM tower_sessions")
+            .fetch_all(&self.pool)
+            .await?;
+
+        for row in rows {
+            let id: String = row.try_get("id")?;
+            let data: String = row.try_get("data")?;
+            let matches = serde_json::from_str::<serde_json::Value>(&data)
+                .ok()
+                .and_then(|v| {
+                    v.get("username")
+                        .and_then(|u| u.as_str().map(str::to_string))
+                })
+                .is_some_and(|u| u == username);
+
+            if matches {
+                sqlx::query("DELETE FROM tower_sessions WHERE id = ?")
+                    .bind(id)
+                    .execute(&self.pool)
+                    .await?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[async_trait]

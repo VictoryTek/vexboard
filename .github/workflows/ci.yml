@@ -43,7 +43,7 @@ jobs:
       - name: Generate OpenAPI spec
         env:
           VEXBOARD_DATABASE__PATH: /tmp/vexboard-ci.db
-          VEXBOARD_AUTH__SECRET: ci-only-not-a-real-secret
+          VEXBOARD_AUTH__SECRET: ci-only-not-a-real-secret-0123456789
           VEXBOARD_DISCOVERY__ENABLED: "false"
           VEXBOARD_DOCKER__ENABLED: "false"
           VEXBOARD_SERVER__PORT: "17280"

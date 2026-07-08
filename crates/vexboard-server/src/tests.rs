@@ -9,7 +9,7 @@ use axum::Router;
 use serde_json::Value;
 use sqlx::SqlitePool;
 use tower::ServiceExt;
-use tower_sessions::{MemoryStore, SessionManagerLayer};
+use tower_sessions::SessionManagerLayer;
 
 use crate::config::{
     AppConfig, AuthConfig, DatabaseConfig, DiscoveryConfig, DockerConfig, MetricsConfig,
@@ -79,6 +79,9 @@ impl TestApp {
         let (metrics_tx, _) = tokio::sync::broadcast::channel(4);
         let (probe_tx, _) = tokio::sync::broadcast::channel(4);
 
+        let session_store = crate::session_store::SqliteSessionStore::new(pool.clone());
+        session_store.migrate().await.unwrap();
+
         let state = AppState {
             db: pool.clone(),
             config: Arc::new(test_config()),
@@ -86,9 +89,9 @@ impl TestApp {
             metrics_tx,
             probe_tx,
             login_limiter: Arc::new(LoginRateLimiter::new(0, 60)),
+            session_store: session_store.clone(),
         };
 
-        let session_store = MemoryStore::default();
         let session_layer = SessionManagerLayer::new(session_store).with_secure(false);
         let app = crate::api::router("session")
             .with_state(state)

@@ -280,6 +280,15 @@ pub(crate) async fn update_user(
 
     match result {
         Ok(_) => {
+            if new_username != target.username || new_role != target.role {
+                if let Err(e) = state
+                    .session_store
+                    .delete_by_username(&target.username)
+                    .await
+                {
+                    tracing::warn!("failed to revoke sessions for updated user: {e}");
+                }
+            }
             let detail =
                 serde_json::json!({"role": new_role, "username": new_username}).to_string();
             db::audit::insert(
@@ -386,6 +395,13 @@ pub(crate) async fn delete_user(
 
     match result {
         Ok(r) if r.rows_affected() > 0 => {
+            if let Err(e) = state
+                .session_store
+                .delete_by_username(&target.username)
+                .await
+            {
+                tracing::warn!("failed to revoke sessions for deleted user: {e}");
+            }
             db::audit::insert(
                 &state.db,
                 &actor,

@@ -15,7 +15,8 @@ allowed_origins = ["*"]
 path = "/var/lib/vexboard/vexboard.db"
 
 [auth]
-# Session secret — override with VEXBOARD_AUTH__SECRET env var in production
+# Session cookie signing secret — must be at least 32 bytes. Override with the
+# VEXBOARD_AUTH__SECRET env var in production, e.g. `openssl rand -base64 48`.
 secret = "change-me-in-production"
 session_ttl_hours = 168  # 7 days
 # Set to true if the server is behind TLS; enables the Secure cookie flag.
