@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use leptos::either::EitherOf4;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
@@ -7,6 +9,15 @@ use crate::components::service_card::{ServiceCard, ServiceData};
 use crate::CurrentUser;
 
 use super::{fetch_services, reorder_services, GroupResponse, ServiceResponse, SortMode};
+
+/// Wire shape of a `probe` event from `/api/v1/services/stream`.
+#[cfg(target_arch = "wasm32")]
+#[derive(Debug, Clone, serde::Deserialize)]
+struct ProbeEventFe {
+    service_id: i64,
+    status: String,
+    latency_ms: Option<i64>,
+}
 
 #[component]
 pub(super) fn ServiceGrid(
@@ -27,6 +38,37 @@ pub(super) fn ServiceGrid(
             .unwrap_or(false)
     };
 
+    // Live status/latency overrides patched in from the probe SSE stream, keyed
+    // by service id. Merged over the last fetched snapshot at render time so
+    // cards reflect probe results without waiting for a full refetch.
+    let live_status = RwSignal::new(HashMap::<i64, (String, Option<i64>)>::new());
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        use wasm_bindgen::closure::Closure;
+        use wasm_bindgen::JsCast;
+        use web_sys::EventSource;
+
+        Effect::new(move |_| {
+            let es = EventSource::new("/api/v1/services/stream").ok();
+            if let Some(es) = es {
+                let on_message = Closure::wrap(Box::new(move |event: web_sys::MessageEvent| {
+                    if let Some(data) = event.data().as_string() {
+                        if let Ok(probe) = serde_json::from_str::<ProbeEventFe>(&data) {
+                            live_status.update(|m| {
+                                m.insert(probe.service_id, (probe.status, probe.latency_ms));
+                            });
+                        }
+                    }
+                }) as Box<dyn FnMut(_)>);
+
+                es.add_event_listener_with_callback("probe", on_message.as_ref().unchecked_ref())
+                    .ok();
+                on_message.forget();
+            }
+        });
+    }
+
     view! {
         <Suspense fallback=move || view! {
             <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,360px)); gap:1rem; justify-content:start;">
@@ -43,7 +85,9 @@ pub(super) fn ServiceGrid(
                 }).collect_view()}
             </div>
         }>
-            {move || services.get().map(|svcs| {
+            {move || {
+                let overrides = live_status.get();
+                services.get().map(|svcs| {
                 let render_card = move |svc: ServiceResponse| {
                     let id = svc.id;
                     let edit_form = EditFormData {
@@ -55,6 +99,9 @@ pub(super) fn ServiceGrid(
                         probe_enabled: svc.probe_enabled,
                         probe_interval: svc.probe_interval,
                     };
+                    let live = overrides.get(&svc.id);
+                    let status = live.map(|l| l.0.clone()).unwrap_or_else(|| svc.status.clone());
+                    let latency_ms = live.map(|l| l.1).unwrap_or(svc.latency_ms);
                     let data = ServiceData {
                         id: svc.id,
                         systemd_unit: svc.systemd_unit,
@@ -63,8 +110,8 @@ pub(super) fn ServiceGrid(
                         description: svc.description,
                         url: svc.url,
                         icon: svc.icon,
-                        status: svc.status,
-                        latency_ms: svc.latency_ms,
+                        status,
+                        latency_ms,
                     };
                     let (on_delete, on_edit) = if is_admin() {
                         let cb_delete = Callback::new(move |_: i64| {
@@ -478,7 +525,8 @@ pub(super) fn ServiceGrid(
                         </div>
                     })
                 }
-            })}
+            })
+            }}
         </Suspense>
     }
 }

@@ -1,4 +1,3 @@
-use gloo_timers::future::TimeoutFuture;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
@@ -34,10 +33,6 @@ pub(super) fn DashboardModals(
                 let _ = req.send().await;
             }
             show_modal.set(false);
-            services.refetch();
-            // The backend fires an immediate probe; wait briefly then refetch so
-            // the status dot reflects the probe result rather than "unknown".
-            TimeoutFuture::new(1_500).await;
             services.refetch();
         });
     });

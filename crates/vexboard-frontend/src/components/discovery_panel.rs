@@ -94,9 +94,16 @@ pub fn DiscoveryPanel(#[prop(into)] on_added: Callback<()>) -> impl IntoView {
     let on_save = Callback::new(move |data: EditFormData| {
         let source = selected_source.get_untracked();
         let unit_name = selected_unit_name.get_untracked();
+        // Docker/Podman container names are not real systemd units — only carry
+        // `unit_name` through as `systemd_unit` for actual systemd discoveries.
+        let systemd_unit = if source.as_deref() == Some("systemd") {
+            unit_name.clone()
+        } else {
+            None
+        };
         spawn_local(async move {
             let body = serde_json::json!({
-                "systemd_unit": unit_name,
+                "systemd_unit": systemd_unit,
                 "discovery_source": source,
                 "display_name": data.display_name,
                 "description": if data.description.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(data.description) },

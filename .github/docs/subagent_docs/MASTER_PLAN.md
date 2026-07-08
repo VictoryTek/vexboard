@@ -37,14 +37,14 @@ Legend: `[BUG]` = incorrect/broken behavior · `[SEC]` = security impact · `[AR
   **Fix:** Cast to `HtmlSelectElement` and enable the `HtmlSelectElement` web-sys feature. Read `.value()` from it.
   *Files:* `src/pages/settings.rs:330-342`, `crates/vexboard-frontend/Cargo.toml`
 
-- [ ] **BUG-3 — Claimed Docker/Podman containers probed as systemd units — always report "down"** *(B-H5)*
+- [x] **BUG-3 — Claimed Docker/Podman containers probed as systemd units — always report "down"** *(B-H5)*
   When the discovery panel claims a Docker container, it posts `systemd_unit: <container-name>`. The probe scheduler gives `systemd_unit` priority over `url`, so the container is probed via `unit_active_state()`, which looks for a nonexistent systemd unit and returns `"inactive"` forever. The dashboard shows a permanent red dot for every claimed container.
   **Fix:** Only set/use `systemd_unit` when `discovery_source == "systemd"`. When source is `"docker"` or `"podman"`, probe via URL only.
   *Files:* `src/components/discovery_panel.rs:98-99`, `src/probe/mod.rs:38-44`, `src/probe/uptime.rs:195-206`
 
 ### Features (High Value, Low Effort — Infrastructure Already Exists)
 
-- [ ] **FEAT-1 — Live service-status SSE stream** *(F-F1, A-H4)*
+- [x] **FEAT-1 — Live service-status SSE stream** *(F-F1, A-H4)*
   The backend has a complete pub/sub pipeline: `probe_tx: broadcast::Sender<ProbeEvent>` in `AppState`, every probe broadcasts a serializable `ProbeEvent`, and the SSE machinery is proven in `api/metrics.rs`. No API handler ever subscribes to `probe_tx` — only the webhook notifier does. The dashboard compensates with a hard-coded sleep-then-refetch hack.
   **Fix:** Add `GET /api/v1/services/stream` (viewer-protected) forwarding `ProbeEvent`s as SSE. In `service_grid.rs`, subscribe once and patch card status/latency signals directly.
   *Files:* `src/api/metrics.rs`, `src/main.rs:39,117`, `src/probe/uptime.rs:35-42`, `src/components/service_grid.rs`

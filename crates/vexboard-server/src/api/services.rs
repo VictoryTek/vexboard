@@ -1,14 +1,20 @@
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::time::Duration;
 
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    response::IntoResponse,
+    response::{
+        sse::{Event, KeepAlive, Sse},
+        IntoResponse,
+    },
     routing::{get, patch, post, put},
     Json, Router,
 };
 use serde_json::json;
+use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::StreamExt;
 
 use crate::db;
 use crate::db::models::{CreateService, ReorderItem, Service, ServiceWithStatus, UpdateService};
@@ -24,7 +30,9 @@ struct LatestProbe {
 }
 
 pub fn read_router() -> Router<AppState> {
-    Router::new().route("/", get(list_services))
+    Router::new()
+        .route("/", get(list_services))
+        .route("/stream", get(stream_service_events))
 }
 
 pub fn admin_router() -> Router<AppState> {
@@ -97,6 +105,34 @@ pub(crate) async fn list_services(State(state): State<AppState>) -> impl IntoRes
         .collect();
 
     (StatusCode::OK, Json(json!(result)))
+}
+
+/// SSE endpoint streaming live probe results as they complete.
+#[utoipa::path(
+    get,
+    path = "/api/v1/services/stream",
+    tag = "services",
+    security(("cookieAuth" = [])),
+    responses(
+        (status = 200, description = "Server-sent event stream of ProbeEvent objects (text/event-stream)",
+         content_type = "text/event-stream"),
+        (status = 401, description = "Not authenticated"),
+    )
+)]
+#[tracing::instrument(skip(state))]
+pub(crate) async fn stream_service_events(
+    State(state): State<AppState>,
+) -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
+    let rx = state.probe_tx.subscribe();
+    let stream = BroadcastStream::new(rx).filter_map(|msg| match msg {
+        Ok(event) => {
+            let data = serde_json::to_string(&event).unwrap_or_default();
+            Some(Ok(Event::default().event("probe").data(data)))
+        }
+        Err(_) => None,
+    });
+
+    Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15)))
 }
 
 #[utoipa::path(

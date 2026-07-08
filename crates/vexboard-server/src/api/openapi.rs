@@ -32,6 +32,7 @@ impl Modify for SecurityAddon {
         crate::api::auth::me,
         crate::api::auth::update_me,
         crate::api::services::list_services,
+        crate::api::services::stream_service_events,
         crate::api::services::create_service,
         crate::api::services::update_service,
         crate::api::services::delete_service,
