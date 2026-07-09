@@ -132,6 +132,13 @@ pub struct ServiceWithStatus {
     pub latency_ms: Option<i64>,
 }
 
+#[derive(Debug, Clone, Serialize, sqlx::FromRow, utoipa::ToSchema)]
+pub struct ProbeHistoryPoint {
+    pub status: String,
+    pub latency_ms: Option<i64>,
+    pub checked_at: Option<NaiveDateTime>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct QuickLink {
     pub id: i64,

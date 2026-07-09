@@ -3,7 +3,7 @@ use std::convert::Infallible;
 use std::time::Duration;
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{
         sse::{Event, KeepAlive, Sse},
@@ -12,12 +12,15 @@ use axum::{
     routing::{get, patch, post, put},
     Json, Router,
 };
+use serde::Deserialize;
 use serde_json::json;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 
 use crate::db;
-use crate::db::models::{CreateService, ReorderItem, Service, ServiceWithStatus, UpdateService};
+use crate::db::models::{
+    CreateService, ProbeHistoryPoint, ReorderItem, Service, ServiceWithStatus, UpdateService,
+};
 use crate::probe;
 use crate::AppState;
 use tower_sessions::Session;
@@ -33,6 +36,18 @@ pub fn read_router() -> Router<AppState> {
     Router::new()
         .route("/", get(list_services))
         .route("/stream", get(stream_service_events))
+        .route("/{id}/history", get(service_history))
+}
+
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub(crate) struct HistoryQuery {
+    /// Maximum number of probe results to return (1-100, default 100).
+    #[serde(default = "default_history_limit")]
+    limit: i64,
+}
+
+fn default_history_limit() -> i64 {
+    100
 }
 
 pub fn admin_router() -> Router<AppState> {
@@ -133,6 +148,53 @@ pub(crate) async fn stream_service_events(
     });
 
     Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15)))
+}
+
+/// Recent probe history for a single service, oldest-first.
+#[utoipa::path(
+    get,
+    path = "/api/v1/services/{id}/history",
+    tag = "services",
+    security(("cookieAuth" = [])),
+    params(
+        ("id" = i64, Path, description = "Service ID"),
+        HistoryQuery,
+    ),
+    responses(
+        (status = 200, description = "Probe history, oldest-first", body = Vec<ProbeHistoryPoint>),
+        (status = 401, description = "Not authenticated"),
+        (status = 500, description = "Database error"),
+    )
+)]
+#[tracing::instrument(skip(state))]
+pub(crate) async fn service_history(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    Query(params): Query<HistoryQuery>,
+) -> impl IntoResponse {
+    let limit = params.limit.clamp(1, 100);
+
+    match sqlx::query_as::<_, ProbeHistoryPoint>(
+        "SELECT status, latency_ms, checked_at FROM probe_results \
+         WHERE service_id = ? ORDER BY checked_at DESC LIMIT ?",
+    )
+    .bind(id)
+    .bind(limit)
+    .fetch_all(&state.db)
+    .await
+    {
+        Ok(mut points) => {
+            points.reverse();
+            (StatusCode::OK, Json(json!(points)))
+        }
+        Err(e) => {
+            tracing::error!("Failed to fetch service history: {e}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to fetch service history"})),
+            )
+        }
+    }
 }
 
 #[utoipa::path(

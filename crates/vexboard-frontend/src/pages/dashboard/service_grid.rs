@@ -112,6 +112,7 @@ pub(super) fn ServiceGrid(
                         icon: svc.icon,
                         status,
                         latency_ms,
+                        probe_enabled: svc.probe_enabled,
                     };
                     let (on_delete, on_edit) = if is_admin() {
                         let cb_delete = Callback::new(move |_: i64| {

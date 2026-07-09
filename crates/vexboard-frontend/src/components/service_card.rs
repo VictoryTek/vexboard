@@ -2,6 +2,77 @@ use leptos::prelude::*;
 
 use crate::components::status_badge::StatusDot;
 
+#[derive(Debug, Clone, serde::Deserialize)]
+struct HistoryPointFe {
+    status: String,
+    latency_ms: Option<i64>,
+}
+
+async fn fetch_history(id: i64) -> Vec<HistoryPointFe> {
+    let Ok(resp) =
+        gloo_net::http::Request::get(&format!("/api/v1/services/{id}/history?limit=100"))
+            .send()
+            .await
+    else {
+        return Vec::new();
+    };
+    if !resp.ok() {
+        return Vec::new();
+    }
+    resp.json::<Vec<HistoryPointFe>>().await.unwrap_or_default()
+}
+
+/// Renders a compact latency sparkline plus an uptime-% label from recent probe history.
+/// Returns nothing if fewer than 2 data points are available.
+fn history_strip(points: Vec<HistoryPointFe>) -> Option<impl IntoView> {
+    if points.len() < 2 {
+        return None;
+    }
+
+    let total = points.len() as f64;
+    let up_count = points.iter().filter(|p| p.status == "up").count() as f64;
+    let uptime_pct = (up_count / total) * 100.0;
+
+    let latencies: Vec<f64> = points
+        .iter()
+        .filter_map(|p| p.latency_ms.map(|ms| ms as f64))
+        .collect();
+
+    let polyline = if latencies.len() >= 2 {
+        let min = latencies.iter().cloned().fold(f64::INFINITY, f64::min);
+        let max = latencies.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let range = (max - min).max(1.0);
+        let step = 100.0 / (latencies.len() - 1) as f64;
+        let pts: Vec<String> = latencies
+            .iter()
+            .enumerate()
+            .map(|(i, v)| {
+                let x = i as f64 * step;
+                let y = 20.0 - ((v - min) / range) * 20.0;
+                format!("{x:.1},{y:.1}")
+            })
+            .collect();
+        Some(pts.join(" "))
+    } else {
+        None
+    };
+
+    Some(view! {
+        <div style="display:flex; align-items:center; gap:0.5rem; margin:0.3rem 0;">
+            {polyline.map(|pts| view! {
+                <svg width="70" height="20" viewBox="0 0 100 20" preserveAspectRatio="none"
+                     style="flex-shrink:0; overflow:visible;">
+                    <polyline points={pts} fill="none" stroke="var(--color-accent)"
+                              stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            })}
+            <span style="font-size:0.68rem; color:var(--color-text-muted);">
+                {format!("{uptime_pct:.1}% uptime")}
+            </span>
+        </div>
+    })
+}
+
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct ServiceData {
@@ -14,6 +85,7 @@ pub struct ServiceData {
     pub icon: Option<String>,
     pub status: String,
     pub latency_ms: Option<i64>,
+    pub probe_enabled: bool,
 }
 
 #[component]
@@ -23,6 +95,14 @@ pub fn ServiceCard(
     on_edit: Option<Callback<i64>>,
 ) -> impl IntoView {
     let service_id = service.id;
+    let probe_enabled = service.probe_enabled;
+    let history = LocalResource::new(move || async move {
+        if probe_enabled {
+            fetch_history(service_id).await
+        } else {
+            Vec::new()
+        }
+    });
     let (badge_cls, status_label) = match service.status.as_str() {
         "up" => ("status-badge status-badge-up", "Up"),
         "down" => ("status-badge status-badge-down", "Down"),
@@ -128,6 +208,9 @@ pub fn ServiceCard(
                     {d}
                 </p>
             })}
+
+            // Latency sparkline + uptime-% (only when probe history is available)
+            {move || history.get().and_then(history_strip)}
 
             // Bottom row: status badge (left) | edit + remove (right, admin only)
             <div style="display:flex; align-items:center; justify-content:space-between; margin-top:0.4rem;"

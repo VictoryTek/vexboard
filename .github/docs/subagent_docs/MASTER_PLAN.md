@@ -49,12 +49,12 @@ Legend: `[BUG]` = incorrect/broken behavior · `[SEC]` = security impact · `[AR
   **Fix:** Add `GET /api/v1/services/stream` (viewer-protected) forwarding `ProbeEvent`s as SSE. In `service_grid.rs`, subscribe once and patch card status/latency signals directly.
   *Files:* `src/api/metrics.rs`, `src/main.rs:39,117`, `src/probe/uptime.rs:35-42`, `src/components/service_grid.rs`
 
-- [ ] **FEAT-2 — Dismiss discovered services** *(F-F2)*
+- [x] **FEAT-2 — Dismiss discovered services** *(F-F2)*
   The Settings page tells users they can "claim or dismiss" discovered services. Dismiss does not exist anywhere — no handler, no button, no persistence. Every unclaimed unit reappears forever.
   **Fix:** Add `dismissed_units` table (`source`, `unit_name`, `created_at`). Add `POST /api/v1/discovery/dismiss` and `DELETE` endpoint (admin). Filter dismissed names in discovery loops. Add "Dismiss" button in `discovery_panel.rs`.
   *Files:* `src/discovery/systemd.rs`, `src/discovery/docker.rs`, `src/components/discovery_panel.rs`
 
-- [ ] **FEAT-3 — Uptime history endpoint + sparkline on service cards** *(F-F5)*
+- [x] **FEAT-3 — Uptime history endpoint + sparkline on service cards** *(F-F5)*
   `probe_results` already stores up to 100 results per service with status, latency, and timestamp. The only read of that table is "latest row per service." All that history is collected, trimmed, and never shown.
   **Fix:** Add `GET /api/v1/services/{id}/history?limit=100` (viewer-protected). Add latency sparkline + uptime-% strip to `service_card.rs`.
   *Files:* `src/api/services.rs`, `src/components/service_card.rs`
