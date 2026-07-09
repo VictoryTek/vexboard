@@ -73,6 +73,13 @@ async fn fetch_discovered_units() -> Vec<DiscoveredUnitFe> {
         .unwrap_or_default()
 }
 
+async fn dismiss_unit(source: String, unit_name: String) {
+    let body = serde_json::json!({ "source": source, "unit_name": unit_name });
+    if let Ok(req) = gloo_net::http::Request::post("/api/v1/discovery/dismiss").json(&body) {
+        let _ = req.send().await;
+    }
+}
+
 async fn fetch_groups_for_panel() -> Vec<GroupEntryFe> {
     let Ok(resp) = gloo_net::http::Request::get("/api/v1/groups").send().await else {
         return Vec::new();
@@ -195,6 +202,7 @@ pub fn DiscoveryPanel(#[prop(into)] on_added: Callback<()>) -> impl IntoView {
                             let desc = unit.description.clone();
                             let url_hint = unit.url_hint.clone();
                             let unit_c = unit.clone();
+                            let unit_d = unit.clone();
                             view! {
                                 <div class="service-card" style="opacity:0.88;">
                                     <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:0.75rem;">
@@ -218,17 +226,32 @@ pub fn DiscoveryPanel(#[prop(into)] on_added: Callback<()>) -> impl IntoView {
                                                 </p>
                                             })}
                                         </div>
-                                        <button
-                                            class="btn-primary"
-                                            style="flex-shrink:0; padding:0.3rem 0.75rem; font-size:0.75rem;"
-                                            on:click=move |_| {
-                                                set_selected_source.set(Some(unit_c.source.clone()));
-                                                set_selected_unit_name.set(Some(unit_c.unit_name.clone()));
-                                                set_editing.set(Some(unit_c.clone()));
-                                            }
-                                        >
-                                            "Add"
-                                        </button>
+                                        <div style="display:flex; flex-direction:column; gap:0.3rem; flex-shrink:0;">
+                                            <button
+                                                class="btn-primary"
+                                                style="padding:0.3rem 0.75rem; font-size:0.75rem;"
+                                                on:click=move |_| {
+                                                    set_selected_source.set(Some(unit_c.source.clone()));
+                                                    set_selected_unit_name.set(Some(unit_c.unit_name.clone()));
+                                                    set_editing.set(Some(unit_c.clone()));
+                                                }
+                                            >
+                                                "Add"
+                                            </button>
+                                            <button
+                                                style="padding:0.3rem 0.75rem; font-size:0.75rem; background:none; border:1px solid var(--color-border); color:var(--color-text-muted); border-radius:0.375rem; cursor:pointer;"
+                                                on:click=move |_| {
+                                                    let source = unit_d.source.clone();
+                                                    let unit_name = unit_d.unit_name.clone();
+                                                    spawn_local(async move {
+                                                        dismiss_unit(source, unit_name).await;
+                                                        units.refetch();
+                                                    });
+                                                }
+                                            >
+                                                "Dismiss"
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             }

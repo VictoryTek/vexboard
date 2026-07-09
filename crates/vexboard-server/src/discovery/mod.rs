@@ -8,7 +8,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -36,10 +36,18 @@ pub fn new_discovery_list() -> DiscoveryList {
     Arc::new(RwLock::new(Vec::new()))
 }
 
+/// Request body for dismissing/un-dismissing a discovered unit.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct DismissRequest {
+    pub source: String,
+    pub unit_name: String,
+}
+
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(list_discovered))
         .route("/refresh", post(trigger_refresh))
+        .route("/dismiss", post(dismiss_unit).delete(undismiss_unit))
 }
 
 /// List all unclaimed discovered systemd units.
@@ -113,4 +121,121 @@ pub(crate) async fn trigger_refresh(
         StatusCode::ACCEPTED,
         Json(json!({"status": "refresh triggered"})),
     )
+}
+
+/// Dismiss a discovered unit so it stops reappearing in future discovery passes.
+#[utoipa::path(
+    post,
+    path = "/api/v1/discovery/dismiss",
+    tag = "discovery",
+    security(("cookieAuth" = [])),
+    request_body = DismissRequest,
+    responses(
+        (status = 200, description = "Unit dismissed"),
+        (status = 401, description = "Not authenticated"),
+        (status = 500, description = "Database error"),
+    )
+)]
+#[tracing::instrument(skip(state, session))]
+pub(crate) async fn dismiss_unit(
+    State(state): State<AppState>,
+    session: Session,
+    Json(payload): Json<DismissRequest>,
+) -> impl IntoResponse {
+    match sqlx::query("INSERT OR IGNORE INTO dismissed_units (source, unit_name) VALUES (?, ?)")
+        .bind(&payload.source)
+        .bind(&payload.unit_name)
+        .execute(&state.db)
+        .await
+    {
+        Ok(_) => {
+            let mut discoveries = state.discoveries.write().await;
+            discoveries
+                .retain(|u| !(u.source == payload.source && u.unit_name == payload.unit_name));
+            drop(discoveries);
+
+            let actor = session
+                .get::<String>("username")
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "unknown".to_string());
+            let detail =
+                json!({"source": payload.source, "unit_name": payload.unit_name}).to_string();
+            db::audit::insert(
+                &state.db,
+                &actor,
+                "discovery.dismiss",
+                None,
+                None,
+                Some(&detail),
+                None,
+            )
+            .await;
+            (StatusCode::OK, Json(json!({"status": "dismissed"})))
+        }
+        Err(e) => {
+            tracing::error!("Failed to dismiss unit: {e}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to dismiss unit"})),
+            )
+        }
+    }
+}
+
+/// Un-dismiss a previously dismissed unit so it can reappear on the next discovery pass.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/discovery/dismiss",
+    tag = "discovery",
+    security(("cookieAuth" = [])),
+    request_body = DismissRequest,
+    responses(
+        (status = 200, description = "Unit un-dismissed"),
+        (status = 401, description = "Not authenticated"),
+        (status = 500, description = "Database error"),
+    )
+)]
+#[tracing::instrument(skip(state, session))]
+pub(crate) async fn undismiss_unit(
+    State(state): State<AppState>,
+    session: Session,
+    Json(payload): Json<DismissRequest>,
+) -> impl IntoResponse {
+    match sqlx::query("DELETE FROM dismissed_units WHERE source = ? AND unit_name = ?")
+        .bind(&payload.source)
+        .bind(&payload.unit_name)
+        .execute(&state.db)
+        .await
+    {
+        Ok(_) => {
+            let actor = session
+                .get::<String>("username")
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "unknown".to_string());
+            let detail =
+                json!({"source": payload.source, "unit_name": payload.unit_name}).to_string();
+            db::audit::insert(
+                &state.db,
+                &actor,
+                "discovery.undismiss",
+                None,
+                None,
+                Some(&detail),
+                None,
+            )
+            .await;
+            (StatusCode::OK, Json(json!({"status": "undismissed"})))
+        }
+        Err(e) => {
+            tracing::error!("Failed to undismiss unit: {e}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to undismiss unit"})),
+            )
+        }
+    }
 }

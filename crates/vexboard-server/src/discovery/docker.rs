@@ -48,6 +48,15 @@ pub async fn discover_containers(
             .collect()
     };
 
+    let dismissed: HashSet<(String, String)> = sqlx::query_as::<_, (String, String)>(
+        "SELECT source, unit_name FROM dismissed_units WHERE source IN ('docker', 'podman')",
+    )
+    .fetch_all(db)
+    .await
+    .unwrap_or_default()
+    .into_iter()
+    .collect();
+
     let mut all = Vec::new();
 
     for socket in &config.sockets {
@@ -59,7 +68,15 @@ pub async fn discover_containers(
         } else {
             "docker"
         };
-        match discover_from_socket(socket, source, db, &config.exclude_images, &systemd_units).await
+        match discover_from_socket(
+            socket,
+            source,
+            db,
+            &config.exclude_images,
+            &systemd_units,
+            &dismissed,
+        )
+        .await
         {
             Ok(mut units) => all.append(&mut units),
             Err(e) => tracing::debug!(%socket, "socket query failed: {e}"),
@@ -93,6 +110,7 @@ async fn discover_from_socket(
     db: &SqlitePool,
     exclude_images: &[String],
     systemd_units: &HashSet<String>,
+    dismissed: &HashSet<(String, String)>,
 ) -> anyhow::Result<Vec<DiscoveredUnit>> {
     let host = socket_host(socket);
     let docker = Docker::connect_with_socket(socket, 10, bollard::API_DEFAULT_VERSION)?;
@@ -183,6 +201,10 @@ async fn discover_from_socket(
         .unwrap_or(false);
 
         if claimed {
+            continue;
+        }
+
+        if dismissed.contains(&(source.to_string(), name.clone())) {
             continue;
         }
 

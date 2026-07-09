@@ -55,6 +55,8 @@ impl Modify for SecurityAddon {
         crate::api::metrics::metrics_stream,
         crate::discovery::list_discovered,
         crate::discovery::trigger_refresh,
+        crate::discovery::dismiss_unit,
+        crate::discovery::undismiss_unit,
     ),
     components(
         schemas(
@@ -77,6 +79,7 @@ impl Modify for SecurityAddon {
             crate::db::models::UpdateUserRequest,
             crate::api::setup::SetupRequest,
             crate::discovery::DiscoveredUnit,
+            crate::discovery::DismissRequest,
         )
     ),
     modifiers(&SecurityAddon),

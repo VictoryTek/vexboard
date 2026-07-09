@@ -91,6 +91,15 @@ pub async fn discover_units(
     // ListUnits returns Vec of unit structs
     let units = proxy.list_units().await?;
 
+    let dismissed: HashSet<String> = sqlx::query_scalar::<_, String>(
+        "SELECT unit_name FROM dismissed_units WHERE source = 'systemd'",
+    )
+    .fetch_all(db)
+    .await
+    .unwrap_or_default()
+    .into_iter()
+    .collect();
+
     let mut unclaimed = Vec::new();
 
     for unit in &units {
@@ -131,6 +140,10 @@ pub async fn discover_units(
         .unwrap_or(false);
 
         if claimed {
+            continue;
+        }
+
+        if dismissed.contains(name) {
             continue;
         }
 

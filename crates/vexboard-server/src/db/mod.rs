@@ -75,6 +75,10 @@ pub(crate) async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
         sqlx::raw_sql(color_sql).execute(pool).await?;
     }
 
+    // Dismissed discovery units table (005_dismissed_units.sql) — idempotent (IF NOT EXISTS).
+    let dismissed_sql = include_str!("migrations/005_dismissed_units.sql");
+    sqlx::raw_sql(dismissed_sql).execute(pool).await?;
+
     tracing::info!("Database migrations applied");
     Ok(())
 }
