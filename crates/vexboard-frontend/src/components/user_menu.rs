@@ -1,7 +1,9 @@
 use leptos::either::Either;
+use leptos::ev;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use serde::Deserialize;
+use wasm_bindgen::JsCast;
 
 const AVATAR_COLORS: &[(&str, &str)] = &[
     ("#3b82f6", "Blue"),
@@ -71,6 +73,22 @@ pub fn UserMenu() -> impl IntoView {
 
     let (dropdown_open, set_dropdown_open) = signal(false);
     let (modal_open, set_modal_open) = signal(false);
+    let menu_ref = NodeRef::<leptos::html::Div>::new();
+
+    let click_listener = window_event_listener(ev::click, move |ev| {
+        if !dropdown_open.get_untracked() {
+            return;
+        }
+        let target = ev.target().and_then(|t| t.dyn_into::<web_sys::Node>().ok());
+        let inside = menu_ref
+            .get_untracked()
+            .zip(target)
+            .is_some_and(|(el, target)| el.contains(Some(&target)));
+        if !inside {
+            set_dropdown_open.set(false);
+        }
+    });
+    on_cleanup(move || click_listener.remove());
 
     let (avatar_color, set_avatar_color) = signal(load_avatar_color());
 
@@ -153,7 +171,7 @@ pub fn UserMenu() -> impl IntoView {
     };
 
     view! {
-        <div class="user-menu">
+        <div class="user-menu" node_ref=menu_ref>
             <button class="user-menu-trigger"
                 on:click=move |_| set_dropdown_open.update(|v| *v = !*v)>
                 <span class="user-menu-avatar"
