@@ -452,7 +452,10 @@
   /* ── Account Settings Modal ── */
   .acct-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 300; display: flex; align-items: center; justify-content: center; }
   .acct-modal { background: #1e2a38; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 28px 32px; min-width: 340px; max-width: 420px; width: 100%; }
-  .acct-modal h3 { margin: 0 0 20px; font-size: 1.1rem; }
+  .acct-modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .acct-modal-header h3 { margin: 0; font-size: 1.1rem; }
+  .acct-modal-close { background: none; border: none; color: inherit; font-size: 1.4rem; line-height: 1; padding: 2px 4px; opacity: 0.7; cursor: pointer; }
+  .acct-modal-close:hover { opacity: 1; }
   .acct-modal .form-group { margin-bottom: 14px; }
   .acct-modal .form-group label { display: block; font-size: 0.82rem; margin-bottom: 4px; opacity: 0.7; }
   .acct-modal .form-group input { width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.05); color: inherit; font-size: 0.9rem; }

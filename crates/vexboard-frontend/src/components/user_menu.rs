@@ -99,6 +99,12 @@ pub fn UserMenu() -> impl IntoView {
     let (save_error, set_save_error) = signal(Option::<String>::None);
     let (save_success, set_save_success) = signal(false);
 
+    let close_modal = move |_: web_sys::MouseEvent| {
+        set_modal_open.set(false);
+        set_save_error.set(None);
+        set_save_success.set(false);
+    };
+
     let on_logout = move |_: web_sys::MouseEvent| {
         spawn_local(async move {
             let _ = gloo_net::http::Request::post("/api/v1/auth/logout")
@@ -215,7 +221,12 @@ pub fn UserMenu() -> impl IntoView {
         <Show when=move || modal_open.get()>
             <div class="acct-modal-overlay">
                 <div class="acct-modal">
-                    <h3>"Account Settings"</h3>
+                    <div class="acct-modal-header">
+                        <h3>"Account Settings"</h3>
+                        <button class="acct-modal-close" aria-label="Close" on:click=close_modal>
+                            "×"
+                        </button>
+                    </div>
 
                     // Avatar colour picker
                     <div class="form-group">
@@ -294,12 +305,7 @@ pub fn UserMenu() -> impl IntoView {
                         <p class="success-msg">"Saved. Redirecting to login..."</p>
                     })}
                     <div class="modal-actions">
-                        <button class="btn-secondary"
-                            on:click=move |_| {
-                                set_modal_open.set(false);
-                                set_save_error.set(None);
-                                set_save_success.set(false);
-                            }>
+                        <button class="btn-secondary" on:click=close_modal>
                             "Cancel"
                         </button>
                         {move || {
