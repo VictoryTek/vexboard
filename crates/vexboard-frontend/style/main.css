@@ -461,15 +461,64 @@
   .acct-modal .error-msg { color: #e05c5c; font-size: 0.85rem; margin-top: 8px; }
   .acct-modal .success-msg { color: #5ce07a; font-size: 0.85rem; margin-top: 8px; }
 
-  /* ── Settings page grid ── */
-  .settings-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-    gap: 1rem;
-    align-items: start;
+  /* ── Settings page: sectioned list ── */
+  .settings-about-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background-color: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 0.875rem 1.125rem;
+    margin-bottom: 1.5rem;
   }
 
-  .settings-card-full { grid-column: 1 / -1; }
+  .settings-about-banner .settings-section-icon {
+    color: var(--color-text-secondary);
+  }
+
+  .settings-about-text {
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+  }
+
+  .settings-about-text strong {
+    color: var(--color-text-primary);
+    font-weight: 600;
+  }
+
+  .settings-list {
+    background-color: var(--color-bg-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    padding: 0 1.5rem;
+  }
+
+  .settings-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 2rem;
+    padding: 1.5rem 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .settings-row:last-child { border-bottom: none; }
+
+  .settings-row-label { flex: 0 0 240px; }
+
+  .settings-row-control { flex: 1; min-width: 0; }
+
+  .settings-option-row {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+
+  @media (max-width: 720px) {
+    .settings-row { flex-direction: column; gap: 0.75rem; }
+    .settings-row-label { flex: none; }
+  }
 
   .settings-section-header {
     display: flex;
@@ -478,7 +527,7 @@
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--color-text-primary);
-    margin-bottom: 0.875rem;
+    margin-bottom: 0.3rem;
   }
 
   .settings-section-icon {
@@ -492,7 +541,6 @@
     display: flex;
     align-items: flex-start;
     gap: 0.75rem;
-    width: 100%;
     text-align: left;
     padding: 0.75rem 0.875rem;
     border-radius: 0.625rem;
@@ -513,7 +561,6 @@
     display: flex;
     align-items: flex-start;
     gap: 0.75rem;
-    width: 100%;
     text-align: left;
     padding: 0.75rem 0.875rem;
     border-radius: 0.625rem;

@@ -57,33 +57,47 @@ pub fn SettingsPage() -> impl IntoView {
                 <h1 class="page-title">"Settings"</h1>
             </div>
 
-            <div class="settings-grid">
+            <div class="settings-about-banner">
+                // Info-circle icon
+                <svg class="settings-section-icon" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                     stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <p class="settings-about-text">
+                    <strong>{concat!("VexBoard v", env!("CARGO_PKG_VERSION"))}</strong>
+                    " — Self-hosted server dashboard for NixOS and systemd."
+                </p>
+            </div>
+
+            <div class="settings-list">
                 // ── Appearance ──────────────────────────────────────────
-                <div class="card">
-                    <div class="settings-section-header">
-                        // Sun/moon icon
-                        <svg class="settings-section-icon" viewBox="0 0 24 24" fill="none"
-                             stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                             stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="5"/>
-                            <line x1="12" y1="1" x2="12" y2="3"/>
-                            <line x1="12" y1="21" x2="12" y2="23"/>
-                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
-                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-                            <line x1="1" y1="12" x2="3" y2="12"/>
-                            <line x1="21" y1="12" x2="23" y2="12"/>
-                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
-                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-                        </svg>
-                        "Appearance"
-                    </div>
-                    <div class="flex items-center justify-between gap-4">
-                        <div>
-                            <p class="text-sm" style="color: var(--color-text-secondary)">"Theme"</p>
-                            <p class="text-xs mt-0.5" style="color: var(--color-text-muted)">
-                                "Toggle between dark and light mode."
-                            </p>
+                <div class="settings-row">
+                    <div class="settings-row-label">
+                        <div class="settings-section-header">
+                            // Sun/moon icon
+                            <svg class="settings-section-icon" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                 stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="5"/>
+                                <line x1="12" y1="1" x2="12" y2="3"/>
+                                <line x1="12" y1="21" x2="12" y2="23"/>
+                                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                                <line x1="1" y1="12" x2="3" y2="12"/>
+                                <line x1="21" y1="12" x2="23" y2="12"/>
+                                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                            </svg>
+                            "Appearance"
                         </div>
+                        <p class="text-xs" style="color: var(--color-text-muted)">
+                            "Toggle between dark and light mode."
+                        </p>
+                    </div>
+                    <div class="settings-row-control" style="display: flex; justify-content: flex-end;">
                         <button
                             class="btn-secondary"
                             style="flex-shrink: 0"
@@ -118,18 +132,23 @@ pub fn SettingsPage() -> impl IntoView {
                 </div>
 
                 // ── Navigation Sidebar ───────────────────────────────────
-                <div class="card">
-                    <div class="settings-section-header">
-                        // Layout/sidebar icon
-                        <svg class="settings-section-icon" viewBox="0 0 24 24" fill="none"
-                             stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                             stroke-linejoin="round">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                            <line x1="9" y1="3" x2="9" y2="21"/>
-                        </svg>
-                        "Navigation Sidebar"
+                <div class="settings-row">
+                    <div class="settings-row-label">
+                        <div class="settings-section-header">
+                            // Layout/sidebar icon
+                            <svg class="settings-section-icon" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                 stroke-linejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                <line x1="9" y1="3" x2="9" y2="21"/>
+                            </svg>
+                            "Navigation Sidebar"
+                        </div>
+                        <p class="text-xs" style="color: var(--color-text-muted)">
+                            "Choose how the sidebar behaves."
+                        </p>
                     </div>
-                    <div class="space-y-2">
+                    <div class="settings-row-control settings-option-row">
                         {[
                             (SidebarMode::HoverExpand,     "Hover Expand",     "Collapsed by default, expands on hover."),
                             (SidebarMode::AlwaysExpanded,  "Always Expanded",  "Sidebar always shows labels."),
@@ -164,45 +183,35 @@ pub fn SettingsPage() -> impl IntoView {
                 </div>
 
                 // ── Service Discovery ────────────────────────────────────
-                <div class="card">
-                    <div class="settings-section-header">
-                        // Radar/search icon
-                        <svg class="settings-section-icon" viewBox="0 0 24 24" fill="none"
-                             stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                             stroke-linejoin="round">
-                            <circle cx="11" cy="11" r="8"/>
-                            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                            <circle cx="11" cy="11" r="3"/>
-                        </svg>
-                        "Service Discovery"
+                <div class="settings-row">
+                    <div class="settings-row-label">
+                        <div class="settings-section-header">
+                            // Radar/search icon
+                            <svg class="settings-section-icon" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                 stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="8"/>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                                <circle cx="11" cy="11" r="3"/>
+                            </svg>
+                            "Service Discovery"
+                        </div>
+                        <p class="text-xs" style="color: var(--color-text-muted)">
+                            "How newly found services are surfaced."
+                        </p>
                     </div>
-                    <p class="text-xs leading-relaxed" style="color: var(--color-text-muted)">
-                        "VexBoard automatically discovers running systemd services via D-Bus. \
-                         Discovered services appear in the dashboard for you to claim or dismiss."
-                    </p>
+                    <div class="settings-row-control">
+                        <p class="text-xs leading-relaxed" style="color: var(--color-text-secondary)">
+                            "VexBoard automatically discovers running systemd services via D-Bus. \
+                             Discovered services appear in the dashboard for you to claim or dismiss."
+                        </p>
+                    </div>
                 </div>
 
-                // ── About ────────────────────────────────────────────────
-                <div class="card">
-                    <div class="settings-section-header">
-                        // Info-circle icon
-                        <svg class="settings-section-icon" viewBox="0 0 24 24" fill="none"
-                             stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                             stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"/>
-                            <line x1="12" y1="8" x2="12" y2="12"/>
-                            <line x1="12" y1="16" x2="12.01" y2="16"/>
-                        </svg>
-                        "About"
-                    </div>
-                    <p class="text-xs" style="color: var(--color-text-muted)">
-                        {concat!("VexBoard v", env!("CARGO_PKG_VERSION"), " — Self-hosted server dashboard for NixOS and systemd.")}
-                    </p>
-                </div>
-
-                // ── User Management (admin only) — full width ────────────
+                // ── User Management (admin only) ─────────────────────────
                 <Show when=move || is_admin()>
-                    <div class="card settings-card-full">
+                    <div class="settings-row">
+                        <div class="settings-row-label">
                         <div class="settings-section-header">
                             // Users icon
                             <svg class="settings-section-icon" viewBox="0 0 24 24" fill="none"
@@ -215,6 +224,11 @@ pub fn SettingsPage() -> impl IntoView {
                             </svg>
                             "User Management"
                         </div>
+                        <p class="text-xs" style="color: var(--color-text-muted)">
+                            "Admins only. Add, promote, or remove accounts."
+                        </p>
+                        </div>
+                        <div class="settings-row-control">
 
                         // User list
                         <div style="margin-bottom:1rem;">
@@ -304,7 +318,7 @@ pub fn SettingsPage() -> impl IntoView {
                                 <input
                                     type="text"
                                     placeholder="Username"
-                                    class="input"
+                                    class="form-input"
                                     style="flex:1; min-width:120px;"
                                     prop:value=new_username
                                     on:input=move |ev| {
@@ -317,7 +331,7 @@ pub fn SettingsPage() -> impl IntoView {
                                 <input
                                     type="password"
                                     placeholder="Password (min 8)"
-                                    class="input"
+                                    class="form-input"
                                     style="flex:1; min-width:120px;"
                                     prop:value=new_password
                                     on:input=move |ev| {
@@ -328,7 +342,7 @@ pub fn SettingsPage() -> impl IntoView {
                                     }
                                 />
                                 <select
-                                    class="input"
+                                    class="form-input"
                                     style="flex:0 0 auto;"
                                     on:change=move |ev| {
                                         use wasm_bindgen::JsCast;
@@ -377,6 +391,7 @@ pub fn SettingsPage() -> impl IntoView {
                             <Show when=move || !user_error.get().is_empty()>
                                 <p style="font-size:0.75rem; color:var(--color-danger);">{user_error}</p>
                             </Show>
+                        </div>
                         </div>
                     </div>
                 </Show>
