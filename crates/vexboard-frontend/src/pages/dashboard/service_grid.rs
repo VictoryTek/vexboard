@@ -86,7 +86,6 @@ pub(super) fn ServiceGrid(
             </div>
         }>
             {move || {
-                let overrides = live_status.get();
                 services.get().map(|svcs| {
                 let render_card = move |svc: ServiceResponse| {
                     let id = svc.id;
@@ -99,9 +98,6 @@ pub(super) fn ServiceGrid(
                         probe_enabled: svc.probe_enabled,
                         probe_interval: svc.probe_interval,
                     };
-                    let live = overrides.get(&svc.id);
-                    let status = live.map(|l| l.0.clone()).unwrap_or_else(|| svc.status.clone());
-                    let latency_ms = live.map(|l| l.1).unwrap_or(svc.latency_ms);
                     let data = ServiceData {
                         id: svc.id,
                         systemd_unit: svc.systemd_unit,
@@ -110,8 +106,8 @@ pub(super) fn ServiceGrid(
                         description: svc.description,
                         url: svc.url,
                         icon: svc.icon,
-                        status,
-                        latency_ms,
+                        status: svc.status,
+                        latency_ms: svc.latency_ms,
                         probe_enabled: svc.probe_enabled,
                     };
                     let (on_delete, on_edit) = if is_admin() {
@@ -130,7 +126,7 @@ pub(super) fn ServiceGrid(
                     } else {
                         (None, None)
                     };
-                    view! { <ServiceCard service=data on_delete=on_delete on_edit=on_edit /> }
+                    view! { <ServiceCard service=data live_status=live_status on_delete=on_delete on_edit=on_edit /> }
                 };
 
                 if svcs.is_empty() {

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use leptos::prelude::*;
 
 use crate::components::status_badge::StatusDot;
@@ -91,6 +93,7 @@ pub struct ServiceData {
 #[component]
 pub fn ServiceCard(
     service: ServiceData,
+    live_status: RwSignal<HashMap<i64, (String, Option<i64>)>>,
     on_delete: Option<Callback<i64>>,
     on_edit: Option<Callback<i64>>,
 ) -> impl IntoView {
@@ -103,13 +106,19 @@ pub fn ServiceCard(
             Vec::new()
         }
     });
-    let (badge_cls, status_label) = match service.status.as_str() {
-        "up" => ("status-badge status-badge-up", "Up"),
-        "down" => ("status-badge status-badge-down", "Down"),
-        _ => ("status-badge status-badge-unknown", "—"),
-    };
 
-    let latency = service.latency_ms.map(|ms| format!("{ms}ms"));
+    let base_status = service.status.clone();
+    let base_latency = service.latency_ms;
+    let current_status = Signal::derive(move || {
+        live_status
+            .with(|m| m.get(&service_id).map(|(s, _)| s.clone()))
+            .unwrap_or_else(|| base_status.clone())
+    });
+    let current_latency = Signal::derive(move || {
+        live_status
+            .with(|m| m.get(&service_id).and_then(|(_, l)| *l))
+            .or(base_latency)
+    });
 
     let first = service.display_name.chars().next().unwrap_or('?');
     let letter = first.to_ascii_uppercase().to_string();
@@ -216,10 +225,22 @@ pub fn ServiceCard(
             <div style="display:flex; align-items:center; justify-content:space-between; margin-top:0.4rem;"
                 on:click=move |ev| { ev.prevent_default(); ev.stop_propagation(); }
             >
-                <div class={badge_cls}>
-                    <StatusDot status=service.status.clone()/>
-                    <span>{status_label}</span>
-                    {latency.map(|lat| view! {
+                <div class=move || {
+                    match current_status.get().as_str() {
+                        "up" => "status-badge status-badge-up",
+                        "down" => "status-badge status-badge-down",
+                        _ => "status-badge status-badge-unknown",
+                    }
+                }>
+                    {move || view! { <StatusDot status=current_status.get()/> }}
+                    <span>{move || {
+                        match current_status.get().as_str() {
+                            "up" => "Up",
+                            "down" => "Down",
+                            _ => "—",
+                        }
+                    }}</span>
+                    {move || current_latency.get().map(|ms| format!("{ms}ms")).map(|lat| view! {
                         <span style="font-size:0.65rem;font-weight:400;opacity:0.65;text-transform:none;letter-spacing:0">
                             {lat}
                         </span>
