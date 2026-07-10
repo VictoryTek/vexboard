@@ -57,6 +57,8 @@ impl Modify for SecurityAddon {
         crate::api::users::create_user,
         crate::api::users::update_user,
         crate::api::users::delete_user,
+        crate::api::settings::get_auth_mode,
+        crate::api::settings::set_auth_mode,
         crate::api::metrics::metrics_snapshot,
         crate::api::metrics::metrics_stream,
         crate::discovery::list_discovered,
@@ -87,6 +89,8 @@ impl Modify for SecurityAddon {
             crate::db::models::UserPublic,
             crate::db::models::CreateUserRequest,
             crate::db::models::UpdateUserRequest,
+            crate::api::settings::AuthModeStatus,
+            crate::api::settings::SetAuthModeRequest,
             crate::api::setup::SetupRequest,
             crate::discovery::DiscoveredUnit,
             crate::discovery::DismissRequest,
@@ -105,6 +109,7 @@ impl Modify for SecurityAddon {
         (name = "metrics", description = "System metrics (REST snapshot + SSE stream)"),
         (name = "discovery", description = "Auto-discovery of systemd units and containers"),
         (name = "users", description = "User management — admin only"),
+        (name = "settings", description = "Runtime settings — admin only"),
     )
 )]
 pub struct ApiDoc;

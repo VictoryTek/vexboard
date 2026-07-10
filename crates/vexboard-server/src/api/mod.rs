@@ -8,6 +8,7 @@ pub mod openapi;
 pub mod quick_link_groups;
 pub mod quick_links;
 pub mod services;
+pub mod settings;
 pub mod setup;
 pub mod users;
 
@@ -54,7 +55,8 @@ pub fn router(auth_mode: &str) -> Router<AppState> {
             quick_link_groups::admin_router(),
         )
         .nest("/api/v1/discovery", crate::discovery::router())
-        .nest("/api/v1/users", users::router());
+        .nest("/api/v1/users", users::router())
+        .nest("/api/v1/settings", settings::router());
     let admin_protected = if auth_disabled {
         admin_protected
     } else {

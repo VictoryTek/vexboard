@@ -134,13 +134,38 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Starting VexBoard v{}", env!("CARGO_PKG_VERSION"));
 
     // Load configuration
-    let config = AppConfig::load()?;
-    let config = Arc::new(config);
+    let mut config = AppConfig::load()?;
     tracing::info!(host = %config.server.host, port = %config.server.port, "Configuration loaded");
 
     // Initialize database
     let db = db::init_pool(&config.database.path).await?;
     tracing::info!(path = %config.database.path.display(), "Database initialized");
+
+    // A DB-stored auth mode (set via the Settings page) overrides the file/env
+    // config at startup — this is the only writable override path on deployments
+    // (e.g. the NixOS module) where /etc/vexboard/config.toml is read-only.
+    match db::get_setting(&db, "auth_mode").await {
+        Ok(Some(stored)) if stored == "session" || stored == "none" => {
+            if stored != config.auth.mode {
+                tracing::info!(mode = %stored, "Applying auth mode override from settings");
+                config.auth.mode = stored;
+            }
+        }
+        Ok(Some(other)) => {
+            tracing::warn!(value = %other, "Ignoring invalid stored auth_mode setting");
+        }
+        Ok(None) => {}
+        Err(e) => {
+            tracing::warn!("Failed to read auth_mode setting: {e}");
+        }
+    }
+    if config.auth.mode == "session" && config.auth.secret.len() < 32 {
+        anyhow::bail!(
+            "auth.secret must be at least 32 bytes (got {}); generate one with `openssl rand -base64 48`",
+            config.auth.secret.len()
+        );
+    }
+    let config = Arc::new(config);
 
     // Create broadcast channels
     let (metrics_tx, _) = broadcast::channel::<SystemSnapshot>(64);

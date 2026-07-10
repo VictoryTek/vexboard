@@ -11,6 +11,12 @@ struct UserRecord {
     role: String,
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+struct AuthModeStatus {
+    stored_mode: String,
+    restart_required: bool,
+}
+
 #[component]
 pub fn SettingsPage() -> impl IntoView {
     let sidebar_mode =
@@ -38,6 +44,9 @@ pub fn SettingsPage() -> impl IntoView {
     let (new_role, set_new_role) = signal("viewer".to_string());
     let (user_error, set_user_error) = signal(String::new());
 
+    let stored_mode: RwSignal<String> = RwSignal::new("session".to_string());
+    let restart_required: RwSignal<bool> = RwSignal::new(false);
+
     #[cfg(target_arch = "wasm32")]
     leptos::prelude::Effect::new(move |_| {
         if is_admin() {
@@ -48,8 +57,36 @@ pub fn SettingsPage() -> impl IntoView {
                     }
                 }
             });
+            spawn_local(async move {
+                if let Ok(resp) = gloo_net::http::Request::get("/api/v1/settings/auth-mode")
+                    .send()
+                    .await
+                {
+                    if let Ok(status) = resp.json::<AuthModeStatus>().await {
+                        stored_mode.set(status.stored_mode);
+                        restart_required.set(status.restart_required);
+                    }
+                }
+            });
         }
     });
+
+    let set_login_required = move |required: bool| {
+        let mode = if required { "session" } else { "none" }.to_string();
+        spawn_local(async move {
+            let body = serde_json::json!({"mode": mode});
+            if let Ok(req) =
+                gloo_net::http::Request::patch("/api/v1/settings/auth-mode").json(&body)
+            {
+                if let Ok(resp) = req.send().await {
+                    if let Ok(status) = resp.json::<AuthModeStatus>().await {
+                        stored_mode.set(status.stored_mode);
+                        restart_required.set(status.restart_required);
+                    }
+                }
+            }
+        });
+    };
 
     view! {
         <div>
@@ -207,6 +244,71 @@ pub fn SettingsPage() -> impl IntoView {
                         </p>
                     </div>
                 </div>
+
+                // ── Authentication (admin only) ───────────────────────────
+                <Show when=move || is_admin()>
+                    <div class="settings-row">
+                        <div class="settings-row-label">
+                            <div class="settings-section-header">
+                                // Lock icon
+                                <svg class="settings-section-icon" viewBox="0 0 24 24" fill="none"
+                                     stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                     stroke-linejoin="round">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                </svg>
+                                "Login"
+                            </div>
+                            <p class="text-xs" style="color: var(--color-text-muted)">
+                                "Whether VexBoard asks for a username and password."
+                            </p>
+                        </div>
+                        <div class="settings-row-control settings-option-row">
+                            <button
+                                class=move || {
+                                    if stored_mode.get() == "session" {
+                                        "settings-nav-option-active"
+                                    } else {
+                                        "settings-nav-option"
+                                    }
+                                }
+                                on:click=move |_| set_login_required(true)
+                            >
+                                <span class="settings-nav-dot"></span>
+                                <div>
+                                    <p class="text-sm font-medium">"Require Login"</p>
+                                    <p class="text-xs mt-0.5" style="color: var(--color-text-muted)">
+                                        "Recommended. Visitors must sign in to view or manage this dashboard."
+                                    </p>
+                                </div>
+                            </button>
+                            <button
+                                class=move || {
+                                    if stored_mode.get() == "none" {
+                                        "settings-nav-option-active"
+                                    } else {
+                                        "settings-nav-option"
+                                    }
+                                }
+                                on:click=move |_| set_login_required(false)
+                            >
+                                <span class="settings-nav-dot"></span>
+                                <div>
+                                    <p class="text-sm font-medium">"Disable Login"</p>
+                                    <p class="text-xs mt-0.5" style="color: var(--color-text-muted)">
+                                        "Anyone who can reach this server gets full access, no password needed. \
+                                         Only use this if your network already restricts access, e.g. Tailscale-only or an isolated LAN."
+                                    </p>
+                                </div>
+                            </button>
+                            <Show when=move || restart_required.get()>
+                                <p class="text-xs" style="color: var(--color-accent); margin-top: 0.5rem;">
+                                    "Saved — restart VexBoard for this change to take effect."
+                                </p>
+                            </Show>
+                        </div>
+                    </div>
+                </Show>
 
                 // ── User Management (admin only) ─────────────────────────
                 <Show when=move || is_admin()>
