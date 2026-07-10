@@ -156,7 +156,11 @@ pub async fn probe_systemd_unit(
         _ => return,
     };
 
-    let status = match unit_active_state(&unit_name).await {
+    let start = Instant::now();
+    let state_result = unit_active_state(&unit_name).await;
+    let latency_ms = start.elapsed().as_millis() as i64;
+
+    let status = match state_result {
         Ok(state) => match state.as_str() {
             "active" | "reloading" | "activating" => "up".to_string(),
             _ => "down".to_string(),
@@ -171,7 +175,7 @@ pub async fn probe_systemd_unit(
         sqlx::query("INSERT INTO probe_results (service_id, status, latency_ms) VALUES (?, ?, ?)")
             .bind(svc.id)
             .bind(&status)
-            .bind(None::<i64>)
+            .bind(latency_ms)
             .execute(db)
             .await
     {
@@ -199,7 +203,7 @@ pub async fn probe_systemd_unit(
         service_name: svc.display_name.clone(),
         url: None,
         status,
-        latency_ms: None,
+        latency_ms: Some(latency_ms),
     };
     if let Err(e) = tx.send(event) {
         tracing::debug!("no active probe subscribers: {e}");
