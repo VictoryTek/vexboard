@@ -15,7 +15,6 @@ pub(super) fn QuickLinksSection(
     quick_links: LocalResource<Vec<QuickLinkResponse>>,
     groups: LocalResource<Vec<QuickLinkGroupResponse>>,
     sort_mode: ReadSignal<SortMode>,
-    set_sort_mode: WriteSignal<SortMode>,
     drag_src_idx: RwSignal<Option<usize>>,
     drag_over_idx: RwSignal<Option<usize>>,
     section_drag_src: RwSignal<Option<(String, usize)>>,
@@ -79,31 +78,6 @@ pub(super) fn QuickLinksSection(
                             "Quick Links"
                         </h2>
                         <div style="flex:1;"></div>
-                        <div style="display:flex; align-items:center; gap:0.25rem; \
-                                    background:var(--color-bg-surface); border:1px solid var(--color-border); \
-                                    border-radius:0.5rem; padding:0.2rem;">
-                            {[
-                                (SortMode::AZ,    "A-Z"),
-                                (SortMode::Group, "Group"),
-                            ].map(|(mode, label)| view! {
-                                <button
-                                    style=move || {
-                                        let active = sort_mode.get() == mode;
-                                        format!(
-                                            "background:{}; color:{}; border:none; cursor:pointer; \
-                                             border-radius:0.35rem; padding:0.2rem 0.6rem; \
-                                             font-size:0.72rem; font-weight:{}; transition:all 0.15s;",
-                                            if active { "var(--color-accent)" } else { "transparent" },
-                                            if active { "#fff" } else { "var(--color-text-secondary)" },
-                                            if active { "600" } else { "400" },
-                                        )
-                                    }
-                                    on:click=move |_| set_sort_mode.set(mode)
-                                >
-                                    {label}
-                                </button>
-                            })}
-                        </div>
                     </div>
                 };
 

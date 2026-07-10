@@ -115,7 +115,6 @@ pub fn DashboardPage() -> impl IntoView {
     let show_quick_link_groups_modal: RwSignal<bool> = RwSignal::new(false);
     let (show_add_menu, set_show_add_menu) = signal(false);
     let (sort_mode, set_sort_mode) = signal(SortMode::AZ);
-    let (ql_sort_mode, set_ql_sort_mode) = signal(SortMode::AZ);
 
     let drag_src_idx: RwSignal<Option<usize>> = RwSignal::new(None);
     let drag_over_idx: RwSignal<Option<usize>> = RwSignal::new(None);
@@ -342,8 +341,7 @@ pub fn DashboardPage() -> impl IntoView {
             <QuickLinksSection
                 quick_links=quick_links
                 groups=quick_link_groups
-                sort_mode=ql_sort_mode
-                set_sort_mode=set_ql_sort_mode
+                sort_mode=sort_mode
                 drag_src_idx=ql_drag_src_idx
                 drag_over_idx=ql_drag_over_idx
                 section_drag_src=ql_section_drag_src
