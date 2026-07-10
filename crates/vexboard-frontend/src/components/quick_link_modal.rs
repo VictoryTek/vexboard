@@ -2,6 +2,7 @@ use leptos::either::Either;
 use leptos::prelude::*;
 
 use crate::components::icon_picker::IconPicker;
+use crate::components::modal_edit::GroupItem;
 
 #[derive(Debug, Clone)]
 pub struct QuickLinkFormData {
@@ -9,6 +10,7 @@ pub struct QuickLinkFormData {
     pub url: String,
     pub icon: String,
     pub description: String,
+    pub group_id: Option<i64>,
 }
 
 fn extract_favicon_url(url: &str) -> Option<String> {
@@ -34,12 +36,14 @@ pub fn QuickLinkModal(
     #[prop(into)] on_save: Callback<QuickLinkFormData>,
     #[prop(default = "Add Quick Link")] title: &'static str,
     #[prop(optional)] initial: Option<QuickLinkFormData>,
+    #[prop(default = vec![])] groups: Vec<GroupItem>,
 ) -> impl IntoView {
     let initial = initial.unwrap_or(QuickLinkFormData {
         title: String::new(),
         url: String::new(),
         icon: String::new(),
         description: String::new(),
+        group_id: None,
     });
 
     let (name, set_name) = signal(initial.title);
@@ -47,6 +51,7 @@ pub fn QuickLinkModal(
     let (icon, set_icon) = signal(initial.icon);
     let (icon_auto, set_icon_auto) = signal(true);
     let (desc, set_desc) = signal(initial.description);
+    let (selected_group_id, set_selected_group_id) = signal(initial.group_id);
 
     view! {
         <Show when=move || visible.get()>
@@ -133,6 +138,43 @@ pub fn QuickLinkModal(
                                 set_icon.set(url);
                             } />
                         </div>
+                        // Group selector — only rendered when groups are available
+                        {if !groups.is_empty() {
+                            let groups = groups.clone();
+                            Either::Left(view! {
+                                <div>
+                                    <label class="form-label">"Group"</label>
+                                    <select
+                                        class="form-input"
+                                        on:change=move |ev| {
+                                            let val = event_target_value(&ev);
+                                            if val.is_empty() {
+                                                set_selected_group_id.set(None);
+                                            } else if let Ok(id) = val.parse::<i64>() {
+                                                set_selected_group_id.set(Some(id));
+                                            }
+                                        }
+                                    >
+                                        <option value="" selected=move || selected_group_id.get().is_none()>
+                                            "— No group —"
+                                        </option>
+                                        {groups.into_iter().map(|g| {
+                                            let gid = g.id;
+                                            view! {
+                                                <option
+                                                    value={g.id.to_string()}
+                                                    selected=move || selected_group_id.get() == Some(gid)
+                                                >
+                                                    {g.name}
+                                                </option>
+                                            }
+                                        }).collect_view()}
+                                    </select>
+                                </div>
+                            })
+                        } else {
+                            Either::Right(())
+                        }}
                     </div>
                     <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.5rem;">
                         <button class="btn-secondary" on:click=move |_| on_close.run(())>
@@ -144,6 +186,7 @@ pub fn QuickLinkModal(
                                 url: url.get(),
                                 icon: icon.get(),
                                 description: desc.get(),
+                                group_id: selected_group_id.get(),
                             });
                         }>
                             "Save"

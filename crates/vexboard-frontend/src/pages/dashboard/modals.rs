@@ -3,18 +3,24 @@ use leptos::task::spawn_local;
 
 use crate::components::modal_edit::{EditFormData, EditModal};
 use crate::components::modal_groups::GroupsModal;
+use crate::components::modal_quick_link_groups::QuickLinkGroupsModal;
 use crate::components::quick_link_modal::{QuickLinkFormData, QuickLinkModal};
 
-use super::{resolve_groups, GroupResponse, QuickLinkResponse, ServiceResponse};
+use super::{
+    resolve_groups, resolve_quick_link_groups, GroupResponse, QuickLinkGroupResponse,
+    QuickLinkResponse, ServiceResponse,
+};
 
 #[component]
 pub(super) fn DashboardModals(
     services: LocalResource<Vec<ServiceResponse>>,
     quick_links: LocalResource<Vec<QuickLinkResponse>>,
     groups: LocalResource<Vec<GroupResponse>>,
+    quick_link_groups: LocalResource<Vec<QuickLinkGroupResponse>>,
     show_modal: RwSignal<bool>,
     show_add_link_modal: RwSignal<bool>,
     show_groups_modal: RwSignal<bool>,
+    show_quick_link_groups_modal: RwSignal<bool>,
     edit_target: RwSignal<Option<(i64, EditFormData)>>,
     edit_link_target: RwSignal<Option<(i64, QuickLinkFormData)>>,
 ) -> impl IntoView {
@@ -44,6 +50,7 @@ pub(super) fn DashboardModals(
                 "url": data.url,
                 "icon": if data.icon.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(data.icon) },
                 "description": if data.description.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(data.description) },
+                "group_id": data.group_id,
             });
             if let Ok(req) = gloo_net::http::Request::post("/api/v1/quick-links").json(&body) {
                 let _ = req.send().await;
@@ -61,6 +68,13 @@ pub(super) fn DashboardModals(
             on_saved=Callback::new(move |_| { groups.refetch(); services.refetch(); })
         />
 
+        // Quick link group management modal
+        <QuickLinkGroupsModal
+            visible=show_quick_link_groups_modal
+            on_close=Callback::new(move |_| show_quick_link_groups_modal.set(false))
+            on_saved=Callback::new(move |_| { quick_link_groups.refetch(); quick_links.refetch(); })
+        />
+
         // Add service modal — reactive wrapper so groups prop updates when resource loads
         {move || view! {
             <EditModal
@@ -71,12 +85,15 @@ pub(super) fn DashboardModals(
             />
         }}
 
-        // Add quick link modal
-        <QuickLinkModal
-            visible=show_add_link_modal
-            on_close=Callback::new(move |_| show_add_link_modal.set(false))
-            on_save=on_save_link
-        />
+        // Add quick link modal — reactive wrapper so groups prop updates when resource loads
+        {move || view! {
+            <QuickLinkModal
+                visible=show_add_link_modal
+                on_close=Callback::new(move |_| show_add_link_modal.set(false))
+                on_save=on_save_link
+                groups=resolve_quick_link_groups(&quick_link_groups)
+            />
+        }}
 
         // Edit service modal
         {move || edit_target.get().map(|(id, initial)| {
@@ -114,6 +131,7 @@ pub(super) fn DashboardModals(
 
         // Edit quick link modal
         {move || edit_link_target.get().map(|(id, initial)| {
+            let group_items = resolve_quick_link_groups(&quick_link_groups);
             let (show_edit, set_show_edit) = signal(true);
             let on_edit_save = Callback::new(move |data: QuickLinkFormData| {
                 spawn_local(async move {
@@ -122,6 +140,7 @@ pub(super) fn DashboardModals(
                         "url": data.url,
                         "icon": data.icon,
                         "description": data.description,
+                        "group_id": data.group_id,
                     });
                     if let Ok(req) = gloo_net::http::Request::put(&format!("/api/v1/quick-links/{id}")).json(&body) {
                         let _ = req.send().await;
@@ -135,6 +154,7 @@ pub(super) fn DashboardModals(
                     visible=show_edit
                     title="Edit Quick Link"
                     initial=initial
+                    groups=group_items
                     on_close=Callback::new(move |_| { set_show_edit.set(false); edit_link_target.set(None); })
                     on_save=on_edit_save
                 />

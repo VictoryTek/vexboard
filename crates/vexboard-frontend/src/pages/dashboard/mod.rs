@@ -51,9 +51,34 @@ pub(super) struct QuickLinkResponse {
     pub url: String,
     pub icon: Option<String>,
     pub description: Option<String>,
+    pub group_id: Option<i64>,
+    pub sort_order: i64,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub(super) struct QuickLinkGroupResponse {
+    pub id: i64,
+    pub name: String,
+    pub color: Option<String>,
 }
 
 pub(super) fn resolve_groups(groups: &LocalResource<Vec<GroupResponse>>) -> Vec<GroupItem> {
+    groups
+        .get()
+        .map(|g| {
+            g.iter()
+                .map(|r| GroupItem {
+                    id: r.id,
+                    name: r.name.clone(),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+pub(super) fn resolve_quick_link_groups(
+    groups: &LocalResource<Vec<QuickLinkGroupResponse>>,
+) -> Vec<GroupItem> {
     groups
         .get()
         .map(|g| {
@@ -81,17 +106,26 @@ pub fn DashboardPage() -> impl IntoView {
     let quick_links =
         LocalResource::new(|| async move { fetch_quick_links().await.unwrap_or_default() });
     let groups = LocalResource::new(|| async move { fetch_groups().await.unwrap_or_default() });
+    let quick_link_groups =
+        LocalResource::new(|| async move { fetch_quick_link_groups().await.unwrap_or_default() });
 
     let show_modal: RwSignal<bool> = RwSignal::new(false);
     let show_add_link_modal: RwSignal<bool> = RwSignal::new(false);
     let show_groups_modal: RwSignal<bool> = RwSignal::new(false);
+    let show_quick_link_groups_modal: RwSignal<bool> = RwSignal::new(false);
     let (show_add_menu, set_show_add_menu) = signal(false);
     let (sort_mode, set_sort_mode) = signal(SortMode::AZ);
+    let (ql_sort_mode, set_ql_sort_mode) = signal(SortMode::AZ);
 
     let drag_src_idx: RwSignal<Option<usize>> = RwSignal::new(None);
     let drag_over_idx: RwSignal<Option<usize>> = RwSignal::new(None);
     let section_drag_src: RwSignal<Option<(String, usize)>> = RwSignal::new(None);
     let section_drag_over: RwSignal<Option<(String, usize)>> = RwSignal::new(None);
+
+    let ql_drag_src_idx: RwSignal<Option<usize>> = RwSignal::new(None);
+    let ql_drag_over_idx: RwSignal<Option<usize>> = RwSignal::new(None);
+    let ql_section_drag_src: RwSignal<Option<(String, usize)>> = RwSignal::new(None);
+    let ql_section_drag_over: RwSignal<Option<(String, usize)>> = RwSignal::new(None);
 
     let edit_target: RwSignal<Option<(i64, EditFormData)>> = RwSignal::new(None);
     let edit_link_target: RwSignal<Option<(i64, QuickLinkFormData)>> = RwSignal::new(None);
@@ -101,9 +135,11 @@ pub fn DashboardPage() -> impl IntoView {
             services=services
             quick_links=quick_links
             groups=groups
+            quick_link_groups=quick_link_groups
             show_modal=show_modal
             show_add_link_modal=show_add_link_modal
             show_groups_modal=show_groups_modal
+            show_quick_link_groups_modal=show_quick_link_groups_modal
             edit_target=edit_target
             edit_link_target=edit_link_target
         />
@@ -264,6 +300,25 @@ pub fn DashboardPage() -> impl IntoView {
                                     </svg>
                                     "Manage Groups"
                                 </button>
+                                <button
+                                    style="width:100%; background:none; border:none; cursor:pointer; \
+                                           display:flex; align-items:center; gap:0.6rem; \
+                                           padding:0.5rem 0.75rem; border-radius:0.4rem; \
+                                           font-size:0.82rem; color:var(--color-text-primary); text-align:left;"
+                                    onmouseover="this.style.background='var(--color-bg-hover)'"
+                                    onmouseout="this.style.background='none'"
+                                    on:click=move |_| {
+                                        set_show_add_menu.set(false);
+                                        show_quick_link_groups_modal.set(true);
+                                    }
+                                >
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                                         stroke="currentColor" stroke-width="2"
+                                         stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                                    </svg>
+                                    "Manage Quick Link Groups"
+                                </button>
                             </div>
                         </Show>
                     </div>
@@ -286,6 +341,13 @@ pub fn DashboardPage() -> impl IntoView {
             // ── Quick links ───────────────────────────────────────────────────────
             <QuickLinksSection
                 quick_links=quick_links
+                groups=quick_link_groups
+                sort_mode=ql_sort_mode
+                set_sort_mode=set_ql_sort_mode
+                drag_src_idx=ql_drag_src_idx
+                drag_over_idx=ql_drag_over_idx
+                section_drag_src=ql_section_drag_src
+                section_drag_over=ql_section_drag_over
                 edit_link_target=edit_link_target
             />
         </div>
@@ -313,12 +375,32 @@ pub(super) async fn fetch_quick_links() -> Result<Vec<QuickLinkResponse>, gloo_n
     resp.json().await
 }
 
+pub(super) async fn fetch_quick_link_groups() -> Result<Vec<QuickLinkGroupResponse>, gloo_net::Error>
+{
+    let resp = gloo_net::http::Request::get("/api/v1/quick-link-groups")
+        .send()
+        .await?;
+    resp.json().await
+}
+
 pub(super) async fn reorder_services(items: Vec<(i64, i64)>) -> Result<(), gloo_net::Error> {
     let body: Vec<_> = items
         .iter()
         .map(|(id, so)| serde_json::json!({"id": id, "sort_order": so}))
         .collect();
     gloo_net::http::Request::patch("/api/v1/services/reorder")
+        .json(&body)?
+        .send()
+        .await?;
+    Ok(())
+}
+
+pub(super) async fn reorder_quick_links(items: Vec<(i64, i64)>) -> Result<(), gloo_net::Error> {
+    let body: Vec<_> = items
+        .iter()
+        .map(|(id, so)| serde_json::json!({"id": id, "sort_order": so}))
+        .collect();
+    gloo_net::http::Request::patch("/api/v1/quick-links/reorder")
         .json(&body)?
         .send()
         .await?;
