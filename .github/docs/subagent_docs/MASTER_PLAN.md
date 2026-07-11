@@ -73,7 +73,7 @@ Legend: `[BUG]` = incorrect/broken behavior · `[SEC]` = security impact · `[AR
   `Instant - Duration` panics on underflow. On boot-started deployments, any login within `window` seconds of boot panics the handler. Use `now.checked_sub(self.window)`.
   *Files:* `src/rate_limit.rs:27`
 
-- [ ] **SEC-5 — `/auth/me` defaults missing role to `"admin"`** *(B-M3)*
+- [x] **SEC-5 — `/auth/me` defaults missing role to `"admin"`** *(B-M3)*
   If `role` is absent from a session (possible for sessions created before roles were added), `me()` returns `role: "admin"`. Change fallback to `"viewer"`.
   *Files:* `src/api/auth.rs:260-268`
 

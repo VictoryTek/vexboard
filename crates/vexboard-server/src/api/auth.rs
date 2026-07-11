@@ -280,7 +280,7 @@ pub(crate) async fn me(session: Session) -> impl IntoResponse {
                     .await
                     .ok()
                     .flatten()
-                    .unwrap_or_else(|| "admin".to_string()),
+                    .unwrap_or_else(|| "viewer".to_string()),
                 "local",
             );
 
