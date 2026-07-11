@@ -96,7 +96,7 @@ Legend: `[BUG]` = incorrect/broken behavior · `[SEC]` = security impact · `[AR
   `payload.group_id.or(existing.group_id)` means JSON `null` keeps the old group. Same pattern blocks clearing `discovery_source` and a group's `icon`/`color`. Use a sentinel (e.g. `0` or double-`Option`) to represent "clear to NULL."
   *Files:* `src/api/services.rs:272,286`, `src/api/groups.rs:164-167`, `src/pages/dashboard/modals.rs:92-100`
 
-- [ ] **BUG-5 — Per-service `probe_interval` ignored — all services probe at global interval** *(B-M6, A-A3, F-F3)*
+- [x] **BUG-5 — Per-service `probe_interval` ignored — all services probe at global interval** *(B-M6, A-A3, F-F3)*
   The scheduler probes every enabled service each tick at `default_interval_secs`. `probe_interval` flows through schema, model, DTOs, OpenAPI, and frontend — but is never read. Keep a `HashMap<i64, Instant>` of last-probed times; tick at a short base interval and only probe when due.
   *Files:* `src/probe/mod.rs:19-48`
 

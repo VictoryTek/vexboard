@@ -1,6 +1,7 @@
 pub mod uptime;
 
-use std::time::Duration;
+use std::collections::{HashMap, HashSet};
+use std::time::{Duration, Instant};
 
 use sqlx::SqlitePool;
 use tokio::sync::broadcast;
@@ -16,7 +17,12 @@ pub async fn start_probe_loop(
 ) {
     tracing::info!("Starting uptime probe scheduler");
 
-    let interval = Duration::from_secs(config.default_interval_secs);
+    // The loop wakes at this short, fixed cadence to check which services are due;
+    // each service's own `probe_interval` (not this constant) governs how often it
+    // actually gets probed.
+    const TICK_SECS: u64 = 5;
+    let tick = Duration::from_secs(TICK_SECS);
+    let mut last_probed: HashMap<i64, Instant> = HashMap::new();
 
     loop {
         // Fetch all services that have probing enabled and either a URL or a systemd unit
@@ -29,7 +35,18 @@ pub async fn start_probe_loop(
         .await;
 
         if let Ok(services) = services {
+            let current_ids: HashSet<i64> = services.iter().map(|s| s.id).collect();
+            last_probed.retain(|id, _| current_ids.contains(id));
+
             for svc in services {
+                let due = last_probed.get(&svc.id).is_none_or(|t| {
+                    t.elapsed() >= Duration::from_secs(svc.probe_interval.max(1) as u64)
+                });
+                if !due {
+                    continue;
+                }
+                last_probed.insert(svc.id, Instant::now());
+
                 let db = db.clone();
                 let tx = status_tx.clone();
                 let timeout = Duration::from_secs(config.timeout_secs);
@@ -54,6 +71,6 @@ pub async fn start_probe_loop(
             }
         }
 
-        tokio::time::sleep(interval).await;
+        tokio::time::sleep(tick).await;
     }
 }
