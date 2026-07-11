@@ -14,6 +14,7 @@ pub async fn start_probe_loop(
     db: SqlitePool,
     config: ProbeConfig,
     status_tx: broadcast::Sender<uptime::ProbeEvent>,
+    client: reqwest::Client,
 ) {
     tracing::info!("Starting uptime probe scheduler");
 
@@ -49,7 +50,7 @@ pub async fn start_probe_loop(
 
                 let db = db.clone();
                 let tx = status_tx.clone();
-                let timeout = Duration::from_secs(config.timeout_secs);
+                let client = client.clone();
                 let max_history = config.max_history;
 
                 tokio::spawn(async move {
@@ -65,7 +66,7 @@ pub async fn start_probe_loop(
                     if use_systemd {
                         uptime::probe_systemd_unit(&db, &svc, max_history, &tx).await;
                     } else if svc.url.is_some() {
-                        uptime::probe_service(&db, &svc, timeout, max_history, &tx).await;
+                        uptime::probe_service(&db, &svc, &client, max_history, &tx).await;
                     }
                 });
             }

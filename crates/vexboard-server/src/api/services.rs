@@ -257,7 +257,7 @@ pub(crate) async fn create_service(
             // next frontend refetch instead of waiting for the next probe cycle.
             let probe_db = state.db.clone();
             let probe_tx = state.probe_tx.clone();
-            let timeout_secs = state.config.probe.timeout_secs;
+            let probe_client = state.probe_client.clone();
             let max_history = state.config.probe.max_history;
             tokio::spawn(async move {
                 if let Ok(Some(svc)) = sqlx::query_as::<_, Service>(
@@ -269,7 +269,6 @@ pub(crate) async fn create_service(
                 .fetch_optional(&probe_db)
                 .await
                 {
-                    let timeout = Duration::from_secs(timeout_secs);
                     // Docker/Podman discoveries store the container name in
                     // `systemd_unit`, not a real systemd unit — only trust it as a
                     // D-Bus lookup key when the service wasn't discovered that way.
@@ -286,7 +285,7 @@ pub(crate) async fn create_service(
                         probe::uptime::probe_service(
                             &probe_db,
                             &svc,
-                            timeout,
+                            &probe_client,
                             max_history,
                             &probe_tx,
                         )

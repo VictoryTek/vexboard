@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -46,7 +46,7 @@ pub struct ProbeEvent {
 pub async fn probe_service(
     db: &SqlitePool,
     svc: &Service,
-    timeout: Duration,
+    client: &reqwest::Client,
     max_history: u64,
     tx: &broadcast::Sender<ProbeEvent>,
 ) {
@@ -54,12 +54,6 @@ pub async fn probe_service(
         Some(u) if !u.is_empty() => u.clone(),
         _ => return,
     };
-
-    let client = reqwest::Client::builder()
-        .timeout(timeout)
-        .danger_accept_invalid_certs(false)
-        .build()
-        .unwrap_or_default();
 
     let start = Instant::now();
 

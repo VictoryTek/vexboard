@@ -100,7 +100,7 @@ Legend: `[BUG]` = incorrect/broken behavior · `[SEC]` = security impact · `[AR
   The scheduler probes every enabled service each tick at `default_interval_secs`. `probe_interval` flows through schema, model, DTOs, OpenAPI, and frontend — but is never read. Keep a `HashMap<i64, Instant>` of last-probed times; tick at a short base interval and only probe when due.
   *Files:* `src/probe/mod.rs:19-48`
 
-- [ ] **BUG-6 — New `reqwest::Client` built per probe; timeout removed on fallback** *(B-M7, A-A4)*
+- [x] **BUG-6 — New `reqwest::Client` built per probe; timeout removed on fallback** *(B-M7, A-A4)*
   A fresh client (new connection pool, TLS config) is built per service per cycle. `unwrap_or_default()` on build failure substitutes a client with **no timeout**. Build one shared client at startup (the notifier already demonstrates this pattern).
   *Files:* `src/probe/uptime.rs:58-62`, `src/main.rs:118-121`
 

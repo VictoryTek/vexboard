@@ -116,6 +116,7 @@ pub struct AppState {
     pub discoveries: DiscoveryList,
     pub metrics_tx: broadcast::Sender<SystemSnapshot>,
     pub probe_tx: broadcast::Sender<probe::uptime::ProbeEvent>,
+    pub probe_client: reqwest::Client,
     pub login_limiter: Arc<rate_limit::LoginRateLimiter>,
     pub session_store: session_store::SqliteSessionStore,
 }
@@ -184,6 +185,13 @@ async fn main() -> anyhow::Result<()> {
     let session_store = session_store::SqliteSessionStore::new(db.clone());
     session_store.migrate().await?;
 
+    // Shared HTTP client for uptime probes — reused across every probe instead of
+    // building a fresh connection pool/TLS config per request.
+    let probe_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(config.probe.timeout_secs))
+        .danger_accept_invalid_certs(false)
+        .build()?;
+
     // Build application state
     let state = AppState {
         db: db.clone(),
@@ -191,6 +199,7 @@ async fn main() -> anyhow::Result<()> {
         discoveries: discoveries.clone(),
         metrics_tx: metrics_tx.clone(),
         probe_tx: probe_tx.clone(),
+        probe_client: probe_client.clone(),
         login_limiter,
         session_store: session_store.clone(),
     };
@@ -213,8 +222,9 @@ async fn main() -> anyhow::Result<()> {
     let probe_config = config.probe.clone();
     let probe_db = db.clone();
     let probe_tx_clone = probe_tx.clone();
+    let probe_loop_client = probe_client.clone();
     tokio::spawn(async move {
-        probe::start_probe_loop(probe_db, probe_config, probe_tx_clone).await;
+        probe::start_probe_loop(probe_db, probe_config, probe_tx_clone, probe_loop_client).await;
     });
 
     let metrics_tx_clone = metrics_tx.clone();
