@@ -90,7 +90,10 @@ impl TestApp {
             discoveries: discovery::new_discovery_list(),
             metrics_tx,
             probe_tx,
-            probe_client: reqwest::Client::new(),
+            probe_client: reqwest::Client::builder()
+                .tls_certs_only(std::iter::empty())
+                .build()
+                .unwrap(),
             login_limiter: Arc::new(LoginRateLimiter::new(0, 60)),
             session_store: session_store.clone(),
         };
