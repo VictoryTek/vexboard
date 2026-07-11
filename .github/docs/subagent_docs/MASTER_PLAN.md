@@ -65,7 +65,7 @@ Legend: `[BUG]` = incorrect/broken behavior · `[SEC]` = security impact · `[AR
 
 ### Security
 
-- [ ] **SEC-3 — No session ID rotation on login (session fixation)** *(B-M1)*
+- [x] **SEC-3 — No session ID rotation on login (session fixation)** *(B-M1)*
   Neither login path calls `session.cycle_id()` before inserting credentials. Call it on successful login.
   *Files:* `src/api/auth.rs:84-130,132-211`
 

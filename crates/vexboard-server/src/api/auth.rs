@@ -100,6 +100,9 @@ async fn login_pam(
 ) -> (StatusCode, Json<serde_json::Value>) {
     use crate::pam_auth::authenticate_pam;
     if authenticate_pam(&payload.username, &payload.password) {
+        if let Err(e) = session.cycle_id().await {
+            tracing::error!("failed to cycle session id after login: {e}");
+        }
         if let Err(e) = session.insert("username", payload.username.clone()).await {
             tracing::error!("failed to persist session after login: {e}");
         }
@@ -192,6 +195,9 @@ async fn login_local(
         );
     }
 
+    if let Err(e) = session.cycle_id().await {
+        tracing::error!("failed to cycle session id after login: {e}");
+    }
     if let Err(e) = session.insert("username", user.username.clone()).await {
         tracing::error!("failed to persist session after login: {e}");
     }
