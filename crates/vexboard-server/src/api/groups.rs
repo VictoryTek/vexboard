@@ -162,8 +162,8 @@ pub(crate) async fn update_group(
     };
 
     let name = payload.name.unwrap_or(existing.name);
-    let icon = payload.icon.or(existing.icon);
-    let color = payload.color.or(existing.color);
+    let icon = payload.icon.unwrap_or(existing.icon);
+    let color = payload.color.unwrap_or(existing.color);
     let sort_order = payload.sort_order.unwrap_or(existing.sort_order);
 
     let result =

@@ -376,7 +376,9 @@ pub(crate) async fn update_service(
     };
 
     let display_name = payload.display_name.unwrap_or(existing.display_name);
-    let discovery_source = payload.discovery_source.or(existing.discovery_source);
+    let discovery_source = payload
+        .discovery_source
+        .unwrap_or(existing.discovery_source);
     // Empty string means "clear the field"; None means "keep existing"
     let description = payload
         .description
@@ -390,7 +392,7 @@ pub(crate) async fn update_service(
         .icon
         .map(|v| if v.is_empty() { None } else { Some(v) })
         .unwrap_or(existing.icon);
-    let group_id = payload.group_id.or(existing.group_id);
+    let group_id = payload.group_id.unwrap_or(existing.group_id);
     let sort_order = payload.sort_order.unwrap_or(existing.sort_order);
     let probe_enabled = payload.probe_enabled.unwrap_or(existing.probe_enabled);
     let probe_interval = payload.probe_interval.unwrap_or(existing.probe_interval);

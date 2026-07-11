@@ -92,7 +92,7 @@ Legend: `[BUG]` = incorrect/broken behavior · `[SEC]` = security impact · `[AR
 
 ### Bugs
 
-- [ ] **BUG-4 — `update_service` can never clear `group_id` — "No group" is a no-op** *(B-M5, A-I3)*
+- [x] **BUG-4 — `update_service` can never clear `group_id` — "No group" is a no-op** *(B-M5, A-I3)*
   `payload.group_id.or(existing.group_id)` means JSON `null` keeps the old group. Same pattern blocks clearing `discovery_source` and a group's `icon`/`color`. Use a sentinel (e.g. `0` or double-`Option`) to represent "clear to NULL."
   *Files:* `src/api/services.rs:272,286`, `src/api/groups.rs:164-167`, `src/pages/dashboard/modals.rs:92-100`
 

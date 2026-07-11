@@ -67,14 +67,29 @@ pub struct CreateService {
     pub visible: Option<bool>,
 }
 
+/// Distinguishes "field omitted" (`None`) from "field explicitly `null`" (`Some(None)`) in a
+/// partial-update JSON body, so a PUT payload can request clearing a nullable column instead of
+/// that key's absence being silently treated as "keep existing value."
+fn deserialize_some<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::Deserialize<'de>,
+{
+    Deserialize::deserialize(deserializer).map(Some)
+}
+
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct UpdateService {
-    pub discovery_source: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_some")]
+    #[schema(value_type = Option<String>)]
+    pub discovery_source: Option<Option<String>>,
     pub display_name: Option<String>,
     pub description: Option<String>,
     pub url: Option<String>,
     pub icon: Option<String>,
-    pub group_id: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_some")]
+    #[schema(value_type = Option<i64>)]
+    pub group_id: Option<Option<i64>>,
     pub sort_order: Option<i64>,
     pub probe_enabled: Option<bool>,
     pub probe_interval: Option<i64>,
@@ -93,8 +108,12 @@ pub struct CreateGroup {
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct UpdateGroup {
     pub name: Option<String>,
-    pub icon: Option<String>,
-    pub color: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_some")]
+    #[schema(value_type = Option<String>)]
+    pub icon: Option<Option<String>>,
+    #[serde(default, deserialize_with = "deserialize_some")]
+    #[schema(value_type = Option<String>)]
+    pub color: Option<Option<String>>,
     pub sort_order: Option<i64>,
 }
 
