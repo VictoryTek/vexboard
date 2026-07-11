@@ -104,7 +104,7 @@ Legend: `[BUG]` = incorrect/broken behavior · `[SEC]` = security impact · `[AR
   A fresh client (new connection pool, TLS config) is built per service per cycle. `unwrap_or_default()` on build failure substitutes a client with **no timeout**. Build one shared client at startup (the notifier already demonstrates this pattern).
   *Files:* `src/probe/uptime.rs:58-62`, `src/main.rs:118-121`
 
-- [ ] **BUG-7 — Expired sessions never deleted — unbounded table growth** *(B-M8)*
+- [x] **BUG-7 — Expired sessions never deleted — unbounded table growth** *(B-M8)*
   `load()` filters expired rows but never deletes them. No periodic cleanup. Use tower-sessions' `continuously_delete_expired` pattern.
   *Files:* `src/session_store.rs:61-99`
 

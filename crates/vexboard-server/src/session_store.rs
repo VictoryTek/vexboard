@@ -137,3 +137,28 @@ impl SessionStore for SqliteSessionStore {
         Ok(())
     }
 }
+
+#[async_trait]
+impl tower_sessions::session_store::ExpiredDeletion for SqliteSessionStore {
+    async fn delete_expired(&self) -> session_store::Result<()> {
+        sqlx::query("DELETE FROM tower_sessions WHERE expiry_date <= ?")
+            .bind(OffsetDateTime::now_utc().unix_timestamp())
+            .execute(&self.pool)
+            .await
+            .map_err(|e| session_store::Error::Backend(e.to_string()))?;
+        Ok(())
+    }
+}
+
+/// Periodically deletes expired session rows so the `tower_sessions` table
+/// doesn't grow unbounded — `load()` only filters expired rows out of query
+/// results, it never removes them.
+pub async fn session_cleanup_loop(store: SqliteSessionStore, interval: std::time::Duration) {
+    use tower_sessions::session_store::ExpiredDeletion;
+    loop {
+        if let Err(e) = store.delete_expired().await {
+            tracing::warn!("failed to delete expired sessions: {e}");
+        }
+        tokio::time::sleep(interval).await;
+    }
+}

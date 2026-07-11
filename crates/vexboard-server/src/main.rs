@@ -185,6 +185,12 @@ async fn main() -> anyhow::Result<()> {
     let session_store = session_store::SqliteSessionStore::new(db.clone());
     session_store.migrate().await?;
 
+    let cleanup_store = session_store.clone();
+    tokio::spawn(async move {
+        session_store::session_cleanup_loop(cleanup_store, std::time::Duration::from_secs(3600))
+            .await;
+    });
+
     // Shared HTTP client for uptime probes — reused across every probe instead of
     // building a fresh connection pool/TLS config per request.
     let probe_client = reqwest::Client::builder()
