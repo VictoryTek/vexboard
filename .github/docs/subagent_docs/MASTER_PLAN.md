@@ -81,7 +81,7 @@ Legend: `[BUG]` = incorrect/broken behavior · `[SEC]` = security impact · `[AR
   If the `COUNT(*)` query errors, `unwrap_or(2)` assumes 2 admins and allows demoting/deleting the last admin. Return 500 on count failure instead.
   *Files:* `src/api/users.rs:234-238,369-373`
 
-- [ ] **SEC-7 — Audit log exposed to viewer role** *(A-A8)*
+- [x] **SEC-7 — Audit log exposed to viewer role** *(A-A8)*
   `/api/v1/audit` is under `viewer_protected`. Audit entries contain login-failure usernames and client IPs — viewers can reconstruct the user list and watch admin activity.
   *Files:* `src/api/mod.rs:22-28`
 

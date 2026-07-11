@@ -37,8 +37,7 @@ pub fn router(auth_mode: &str) -> Router<AppState> {
             "/api/v1/quick-link-groups",
             quick_link_groups::read_router(),
         )
-        .nest("/api/v1/metrics", metrics::router())
-        .nest("/api/v1/audit", audit::router());
+        .nest("/api/v1/metrics", metrics::router());
     let viewer_protected = if auth_disabled {
         viewer_protected
     } else {
@@ -56,7 +55,8 @@ pub fn router(auth_mode: &str) -> Router<AppState> {
         )
         .nest("/api/v1/discovery", crate::discovery::router())
         .nest("/api/v1/users", users::router())
-        .nest("/api/v1/settings", settings::router());
+        .nest("/api/v1/settings", settings::router())
+        .nest("/api/v1/audit", audit::router());
     let admin_protected = if auth_disabled {
         admin_protected
     } else {
