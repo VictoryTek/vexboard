@@ -99,14 +99,30 @@ async fn login_pam(
     ip: &str,
 ) -> (StatusCode, Json<serde_json::Value>) {
     use crate::pam_auth::authenticate_pam;
-    if authenticate_pam(&payload.username, &payload.password) {
+    let username = payload.username.clone();
+    let password = payload.password.clone();
+    let authenticated = tokio::task::spawn_blocking(move || authenticate_pam(&username, &password))
+        .await
+        .unwrap_or(false);
+    if authenticated {
         if let Err(e) = session.cycle_id().await {
             tracing::error!("failed to cycle session id after login: {e}");
         }
         if let Err(e) = session.insert("username", payload.username.clone()).await {
             tracing::error!("failed to persist session after login: {e}");
         }
-        if let Err(e) = session.insert("role", "admin".to_string()).await {
+        let role = if state
+            .config
+            .auth
+            .pam_admin_users
+            .iter()
+            .any(|u| u == &payload.username)
+        {
+            "admin"
+        } else {
+            "viewer"
+        };
+        if let Err(e) = session.insert("role", role.to_string()).await {
             tracing::error!("failed to persist role in session after login: {e}");
         }
         db::audit::insert(
@@ -121,7 +137,7 @@ async fn login_pam(
         .await;
         (
             StatusCode::OK,
-            Json(json!({ "user": { "username": payload.username, "role": "admin" } })),
+            Json(json!({ "user": { "username": payload.username, "role": role } })),
         )
     } else {
         let detail = serde_json::json!({"username": payload.username}).to_string();
@@ -271,18 +287,17 @@ pub(crate) async fn me(session: Session) -> impl IntoResponse {
     match session.get::<String>("username").await {
         Ok(Some(username)) => {
             #[cfg(all(unix, feature = "pam-auth"))]
-            let (role, auth_mode) = ("admin".to_string(), "pam");
+            let auth_mode = "pam";
 
             #[cfg(not(all(unix, feature = "pam-auth")))]
-            let (role, auth_mode) = (
-                session
-                    .get::<String>("role")
-                    .await
-                    .ok()
-                    .flatten()
-                    .unwrap_or_else(|| "viewer".to_string()),
-                "local",
-            );
+            let auth_mode = "local";
+
+            let role = session
+                .get::<String>("role")
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "viewer".to_string());
 
             (
                 StatusCode::OK,

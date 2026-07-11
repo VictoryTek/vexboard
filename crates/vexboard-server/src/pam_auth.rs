@@ -92,9 +92,15 @@ mod pam_impl {
         let handle_ref = unsafe { &mut *handle };
 
         let ret = pam_sys::authenticate(handle_ref, PamFlag::NONE);
-        let success = ret == PamReturnCode::SUCCESS;
+        if ret != PamReturnCode::SUCCESS {
+            pam_sys::end(handle_ref, ret);
+            return false;
+        }
 
-        pam_sys::end(handle_ref, ret);
+        let acct_ret = pam_sys::acct_mgmt(handle_ref, PamFlag::NONE);
+        let success = acct_ret == PamReturnCode::SUCCESS;
+
+        pam_sys::end(handle_ref, acct_ret);
 
         success
     }

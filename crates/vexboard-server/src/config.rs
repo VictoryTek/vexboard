@@ -69,6 +69,11 @@ pub struct AuthConfig {
     /// values are otherwise fully spoofable and would defeat the login rate limiter.
     #[serde(default)]
     pub behind_proxy: bool,
+    /// OS usernames that receive the admin role when authenticating via PAM.
+    /// All other successfully PAM-authenticated users get the viewer role.
+    /// Only read when the `pam-auth` feature is compiled in.
+    #[serde(default)]
+    pub pam_admin_users: Vec<String>,
 }
 
 fn default_login_rate_limit_attempts() -> u32 {

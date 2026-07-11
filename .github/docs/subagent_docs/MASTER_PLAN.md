@@ -85,7 +85,7 @@ Legend: `[BUG]` = incorrect/broken behavior · `[SEC]` = security impact · `[AR
   `/api/v1/audit` is under `viewer_protected`. Audit entries contain login-failure usernames and client IPs — viewers can reconstruct the user list and watch admin activity.
   *Files:* `src/api/mod.rs:22-28`
 
-- [ ] **SEC-8 — PAM mode grants every OS account admin** *(B-M14, A-A9)*
+- [x] **SEC-8 — PAM mode grants every OS account admin** *(B-M14, A-A9)*
   With `pam-auth`, any PAM-authenticating user gets `role = "admin"`. `pam_acct_mgmt` is never called (expired/locked accounts can authenticate). PAM call is synchronous on the async runtime (blocks tokio worker ~2s on failure).
   **Fix:** Add `auth.pam_admin_users` allowlist. Call `pam_acct_mgmt`. Wrap in `spawn_blocking`.
   *Files:* `src/pam_auth.rs:73-100`, `src/api/auth.rs:84-98,257-258`

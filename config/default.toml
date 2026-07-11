@@ -35,6 +35,11 @@ login_rate_limit_window_secs = 60
 #     restart the server — existing user accounts are untouched by mode
 #     changes in either direction, so no re-setup is needed.
 mode = "session"
+# OS usernames that receive the admin role when authenticating via PAM (only
+# relevant when the server is built with the `pam-auth` feature). Every other
+# successfully PAM-authenticated user gets the viewer role.
+#   pam_admin_users = ["alice", "bob"]
+pam_admin_users = []
 
 [discovery]
 enabled = true

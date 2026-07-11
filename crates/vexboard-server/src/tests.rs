@@ -42,6 +42,7 @@ fn test_config() -> AppConfig {
             login_rate_limit_window_secs: 60,
             mode: "session".to_string(),
             behind_proxy: false,
+            pam_admin_users: vec![],
         },
         discovery: DiscoveryConfig {
             enabled: false,
