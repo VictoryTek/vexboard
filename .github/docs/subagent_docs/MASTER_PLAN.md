@@ -69,7 +69,7 @@ Legend: `[BUG]` = incorrect/broken behavior · `[SEC]` = security impact · `[AR
   Neither login path calls `session.cycle_id()` before inserting credentials. Call it on successful login.
   *Files:* `src/api/auth.rs:84-130,132-211`
 
-- [ ] **SEC-4 — Login rate limiter panics during first minute after boot** *(B-M2)*
+- [x] **SEC-4 — Login rate limiter panics during first minute after boot** *(B-M2)*
   `Instant - Duration` panics on underflow. On boot-started deployments, any login within `window` seconds of boot panics the handler. Use `now.checked_sub(self.window)`.
   *Files:* `src/rate_limit.rs:27`
 

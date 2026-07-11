@@ -24,11 +24,13 @@ impl LoginRateLimiter {
     /// window are evicted before the count is checked.
     pub fn check(&self, ip: IpAddr) -> bool {
         let now = Instant::now();
-        let cutoff = now - self.window;
+        let cutoff = now.checked_sub(self.window);
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         let attempts = state.entry(ip).or_default();
-        while attempts.front().is_some_and(|t| *t < cutoff) {
-            attempts.pop_front();
+        if let Some(cutoff) = cutoff {
+            while attempts.front().is_some_and(|t| *t < cutoff) {
+                attempts.pop_front();
+            }
         }
         let allowed = (attempts.len() as u32) < self.max_attempts;
         if allowed {
