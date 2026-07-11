@@ -231,16 +231,25 @@ pub(crate) async fn update_user(
     // Guard against removing the last admin
     if let Some(ref new_role) = payload.role {
         if new_role != "admin" && target.role == "admin" {
-            let admin_count: i64 =
+            let admin_count: Result<i64, _> =
                 sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE role = 'admin'")
                     .fetch_one(&state.db)
-                    .await
-                    .unwrap_or(2);
-            if admin_count <= 1 {
-                return (
-                    StatusCode::CONFLICT,
-                    Json(json!({"error": "Cannot demote the last admin"})),
-                );
+                    .await;
+            match admin_count {
+                Ok(count) if count <= 1 => {
+                    return (
+                        StatusCode::CONFLICT,
+                        Json(json!({"error": "Cannot demote the last admin"})),
+                    );
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::error!("DB error checking admin count: {e}");
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({"error": "Database error"})),
+                    );
+                }
             }
         }
         if new_role != "admin" && new_role != "viewer" {
@@ -375,16 +384,25 @@ pub(crate) async fn delete_user(
     }
 
     if target.role == "admin" {
-        let admin_count: i64 =
+        let admin_count: Result<i64, _> =
             sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE role = 'admin'")
                 .fetch_one(&state.db)
-                .await
-                .unwrap_or(2);
-        if admin_count <= 1 {
-            return (
-                StatusCode::CONFLICT,
-                Json(json!({"error": "Cannot delete the last admin"})),
-            );
+                .await;
+        match admin_count {
+            Ok(count) if count <= 1 => {
+                return (
+                    StatusCode::CONFLICT,
+                    Json(json!({"error": "Cannot delete the last admin"})),
+                );
+            }
+            Ok(_) => {}
+            Err(e) => {
+                tracing::error!("DB error checking admin count: {e}");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": "Database error"})),
+                );
+            }
         }
     }
 

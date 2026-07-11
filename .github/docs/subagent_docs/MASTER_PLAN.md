@@ -77,7 +77,7 @@ Legend: `[BUG]` = incorrect/broken behavior · `[SEC]` = security impact · `[AR
   If `role` is absent from a session (possible for sessions created before roles were added), `me()` returns `role: "admin"`. Change fallback to `"viewer"`.
   *Files:* `src/api/auth.rs:260-268`
 
-- [ ] **SEC-6 — Last-admin guard fails open on DB error** *(B-M4)*
+- [x] **SEC-6 — Last-admin guard fails open on DB error** *(B-M4)*
   If the `COUNT(*)` query errors, `unwrap_or(2)` assumes 2 admins and allows demoting/deleting the last admin. Return 500 on count failure instead.
   *Files:* `src/api/users.rs:234-238,369-373`
 
