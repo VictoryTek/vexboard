@@ -79,6 +79,10 @@ pub(crate) async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
     let dismissed_sql = include_str!("migrations/005_dismissed_units.sql");
     sqlx::raw_sql(dismissed_sql).execute(pool).await?;
 
+    // Unique constraint on systemd_unit to prevent duplicate claims (007) — idempotent.
+    let unique_unit_sql = include_str!("migrations/007_unique_systemd_unit.sql");
+    sqlx::raw_sql(unique_unit_sql).execute(pool).await?;
+
     tracing::info!("Database migrations applied");
     Ok(())
 }

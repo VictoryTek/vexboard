@@ -108,7 +108,7 @@ Legend: `[BUG]` = incorrect/broken behavior · `[SEC]` = security impact · `[AR
   `load()` filters expired rows but never deletes them. No periodic cleanup. Use tower-sessions' `continuously_delete_expired` pattern.
   *Files:* `src/session_store.rs:61-99`
 
-- [ ] **BUG-8 — Discovery panel posts to `/services` directly — duplicate claims possible** *(B-M9, A-A6, A-H5)*
+- [x] **BUG-8 — Discovery panel posts to `/services` directly — duplicate claims possible** *(B-M9, A-A6, A-H5)*
   The `claim_service` endpoint has a uniqueness check, but the discovery panel bypasses it by posting to `POST /api/v1/services`. Double-clicking "Add" creates duplicate rows. Add a `UNIQUE` constraint on `services.systemd_unit` and route the panel through the claim endpoint (or add the check to the create path).
   *Files:* `src/api/services.rs:501-547`, `src/components/discovery_panel.rs:109-111`, `src/db/migrations/001_init.sql:14`
 

@@ -206,6 +206,7 @@ pub(crate) async fn service_history(
     responses(
         (status = 201, description = "Service created; returns new ID"),
         (status = 401, description = "Not authenticated"),
+        (status = 409, description = "systemd_unit already claimed by another service"),
         (status = 500, description = "Database error"),
     )
 )]
@@ -215,6 +216,23 @@ pub(crate) async fn create_service(
     session: Session,
     Json(payload): Json<CreateService>,
 ) -> impl IntoResponse {
+    if let Some(ref unit) = payload.systemd_unit {
+        let exists = sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM services WHERE systemd_unit = ? LIMIT 1)",
+        )
+        .bind(unit)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(false);
+
+        if exists {
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({"error": "Unit already claimed"})),
+            );
+        }
+    }
+
     let tags_json = match payload.tags {
         Some(t) => match serde_json::to_string(&t) {
             Ok(j) => Some(j),
@@ -314,6 +332,14 @@ pub(crate) async fn create_service(
             (StatusCode::CREATED, Json(json!({"id": new_id})))
         }
         Err(e) => {
+            if e.as_database_error()
+                .is_some_and(|de| de.is_unique_violation())
+            {
+                return (
+                    StatusCode::CONFLICT,
+                    Json(json!({"error": "Unit already claimed"})),
+                );
+            }
             tracing::error!("Failed to create service: {e}");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -627,28 +653,10 @@ pub(crate) async fn reorder_services(
 pub(crate) async fn claim_service(
     State(state): State<AppState>,
     session: Session,
-    Path(id): Path<i64>,
+    Path(_id): Path<i64>,
     Json(payload): Json<CreateService>,
 ) -> axum::response::Response {
-    if let Some(ref unit) = payload.systemd_unit {
-        let exists = sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM services WHERE systemd_unit = ? LIMIT 1)",
-        )
-        .bind(unit)
-        .fetch_one(&state.db)
-        .await
-        .unwrap_or(false);
-
-        if exists {
-            return (
-                StatusCode::CONFLICT,
-                Json(json!({"error": "Unit already claimed"})),
-            )
-                .into_response();
-        }
-    }
-
-    // Reuse create logic (also writes service.create audit entry)
+    // Reuse create logic (dedup check + audit entry both handled there).
     create_service(State(state), session, Json(payload))
         .await
         .into_response()
