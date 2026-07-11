@@ -494,6 +494,8 @@ pub(super) fn ServiceGrid(
                                         if src_i != dst_i {
                                             spawn_local(async move {
                                                 if let Ok(mut current) = fetch_services().await {
+                                                    current.sort_by(|a, b| a.sort_order.cmp(&b.sort_order)
+                                                        .then_with(|| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase())));
                                                     let item = current.remove(src_i);
                                                     current.insert(dst_i, item);
                                                     let payload: Vec<_> = current.iter()

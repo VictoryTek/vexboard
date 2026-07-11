@@ -112,7 +112,7 @@ Legend: `[BUG]` = incorrect/broken behavior · `[SEC]` = security impact · `[AR
   The `claim_service` endpoint has a uniqueness check, but the discovery panel bypasses it by posting to `POST /api/v1/services`. Double-clicking "Add" creates duplicate rows. Add a `UNIQUE` constraint on `services.systemd_unit` and route the panel through the claim endpoint (or add the check to the create path).
   *Files:* `src/api/services.rs:501-547`, `src/components/discovery_panel.rs:109-111`, `src/db/migrations/001_init.sql:14`
 
-- [ ] **BUG-9 — A-Z drag-and-drop reorders wrong items on sort_order ties** *(B-M10)*
+- [x] **BUG-9 — A-Z drag-and-drop reorders wrong items on sort_order ties** *(B-M10)*
   The rendered list sorts by `sort_order` then name, but the drop handler applies indices to the raw fetch order (`ORDER BY sort_order ASC` only — ties are arbitrary). Apply the same `sort_by` tiebreak before computing indices in the A-Z handler.
   *Files:* `src/pages/dashboard/service_grid.rs:414-417,451-462`
 
