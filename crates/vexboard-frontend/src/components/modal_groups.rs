@@ -91,8 +91,16 @@ pub fn GroupsModal(
             return;
         }
         let color = new_color.get_untracked();
+        let next_order = groups
+            .get_untracked()
+            .unwrap_or_default()
+            .iter()
+            .map(|g| g.sort_order)
+            .max()
+            .map_or(0, |max| max + 1);
         spawn_local(async move {
-            let body = serde_json::json!({ "name": name, "color": color, "sort_order": 0 });
+            let body =
+                serde_json::json!({ "name": name, "color": color, "sort_order": next_order });
             if let Ok(req) = gloo_net::http::Request::post("/api/v1/groups").json(&body) {
                 let _ = req.send().await;
             }
