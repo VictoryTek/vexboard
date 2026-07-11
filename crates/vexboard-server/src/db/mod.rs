@@ -79,6 +79,18 @@ pub(crate) async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
     let dismissed_sql = include_str!("migrations/005_dismissed_units.sql");
     sqlx::raw_sql(dismissed_sql).execute(pool).await?;
 
+    // Add group_id column + quick_link_groups table (006_quick_link_groups.sql) — idempotent.
+    let has_group_id: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pragma_table_info('quick_links') WHERE name = 'group_id'",
+    )
+    .fetch_one(pool)
+    .await?;
+
+    if has_group_id == 0 {
+        let quick_link_groups_sql = include_str!("migrations/006_quick_link_groups.sql");
+        sqlx::raw_sql(quick_link_groups_sql).execute(pool).await?;
+    }
+
     // Unique constraint on systemd_unit to prevent duplicate claims (007) — idempotent.
     let unique_unit_sql = include_str!("migrations/007_unique_systemd_unit.sql");
     sqlx::raw_sql(unique_unit_sql).execute(pool).await?;

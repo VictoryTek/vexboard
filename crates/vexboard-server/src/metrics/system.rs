@@ -194,24 +194,26 @@ async fn read_disk() -> anyhow::Result<(u64, u64)> {
     let mut read_sectors = 0u64;
     let mut write_sectors = 0u64;
 
+    // /sys/block only lists whole/top-level block devices; partitions live
+    // nested under their parent (e.g. /sys/block/sda/sda1), so this covers
+    // every device family (sd*, vd*, xvd*, nvme*n*, mmcblk*, md*, dm-*)
+    // without hardcoding per-family name patterns.
+    let mut whole_disks = std::collections::HashSet::new();
+    if let Ok(mut entries) = tokio::fs::read_dir("/sys/block").await {
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            if let Some(name) = entry.file_name().to_str() {
+                whole_disks.insert(name.to_string());
+            }
+        }
+    }
+
     for line in content.lines() {
         let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.len() < 14 {
             continue;
         }
-        // Only count whole disk devices (e.g., sda, nvme0n1), skip partitions
         let name = parts[2];
-        if name.chars().last().is_some_and(|c| c.is_ascii_digit())
-            && !name.contains("nvme")
-            && !name.starts_with("sd")
-        {
-            continue;
-        }
-        // For sd* and nvme* devices without partition suffix
-        let is_whole_disk = (name.starts_with("sd") && name.len() == 3)
-            || (name.contains("nvme") && name.ends_with("n1") && !name.contains('p'));
-
-        if !is_whole_disk {
+        if !whole_disks.contains(name) {
             continue;
         }
 

@@ -116,11 +116,11 @@ Legend: `[BUG]` = incorrect/broken behavior · `[SEC]` = security impact · `[AR
   The rendered list sorts by `sort_order` then name, but the drop handler applies indices to the raw fetch order (`ORDER BY sort_order ASC` only — ties are arbitrary). Apply the same `sort_by` tiebreak before computing indices in the A-Z handler.
   *Files:* `src/pages/dashboard/service_grid.rs:414-417,451-462`
 
-- [ ] **BUG-10 — Group reordering no-op — all new groups get `sort_order = 0`** *(B-M11)*
+- [x] **BUG-10 — Group reordering no-op — all new groups get `sort_order = 0`** *(B-M11)*
   `do_create` always sends `sort_order: 0`. Swapping two zeros in `do_move` changes nothing. Assign `max(sort_order)+1` on create.
   *Files:* `src/components/modal_groups.rs:95,138-167`
 
-- [ ] **BUG-11 — Disk I/O metrics zero on VMs and many real systems** *(B-M12)*
+- [x] **BUG-11 — Disk I/O metrics zero on VMs and many real systems** *(B-M12)*
   `read_disk()` only matches `sd?` (3 chars) or `nvme*n1`. Excludes `vda`/`vdb` (KVM), `xvda` (Xen), `mmcblk0` (RPi), `md0`/`dm-0` (RAID/LVM), `nvme0n2+`, `sdaa+`. Silently reports 0 on those systems.
   *Files:* `src/metrics/system.rs:192-226`
 
