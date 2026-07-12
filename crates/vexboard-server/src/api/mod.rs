@@ -5,7 +5,6 @@ pub mod groups;
 pub mod health;
 pub mod metrics;
 pub mod openapi;
-pub mod quick_link_groups;
 pub mod quick_links;
 pub mod services;
 pub mod settings;
@@ -33,10 +32,6 @@ pub fn router(auth_mode: &str) -> Router<AppState> {
         .nest("/api/v1/services", services::read_router())
         .nest("/api/v1/groups", groups::read_router())
         .nest("/api/v1/quick-links", quick_links::read_router())
-        .nest(
-            "/api/v1/quick-link-groups",
-            quick_link_groups::read_router(),
-        )
         .nest("/api/v1/metrics", metrics::router());
     let viewer_protected = if auth_disabled {
         viewer_protected
@@ -49,10 +44,6 @@ pub fn router(auth_mode: &str) -> Router<AppState> {
         .nest("/api/v1/services", services::admin_router())
         .nest("/api/v1/groups", groups::admin_router())
         .nest("/api/v1/quick-links", quick_links::admin_router())
-        .nest(
-            "/api/v1/quick-link-groups",
-            quick_link_groups::admin_router(),
-        )
         .nest("/api/v1/discovery", crate::discovery::router())
         .nest("/api/v1/users", users::router())
         .nest("/api/v1/settings", settings::router())

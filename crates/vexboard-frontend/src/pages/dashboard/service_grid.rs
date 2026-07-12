@@ -8,21 +8,12 @@ use crate::components::modal_edit::EditFormData;
 use crate::components::service_card::{ServiceCard, ServiceData};
 use crate::CurrentUser;
 
-use super::{fetch_services, reorder_services, GroupResponse, ServiceResponse, SortMode};
-
-/// Wire shape of a `probe` event from `/api/v1/services/stream`.
-#[cfg(target_arch = "wasm32")]
-#[derive(Debug, Clone, serde::Deserialize)]
-struct ProbeEventFe {
-    service_id: i64,
-    status: String,
-    latency_ms: Option<i64>,
-}
+use super::{fetch_services, reorder_services, ServiceResponse, SortMode};
 
 #[component]
 pub(super) fn ServiceGrid(
     services: LocalResource<Vec<ServiceResponse>>,
-    groups: LocalResource<Vec<GroupResponse>>,
+    live_status: RwSignal<HashMap<i64, (String, Option<i64>)>>,
     sort_mode: ReadSignal<SortMode>,
     drag_src_idx: RwSignal<Option<usize>>,
     drag_over_idx: RwSignal<Option<usize>>,
@@ -37,37 +28,6 @@ pub(super) fn ServiceGrid(
             .map(|u| u.is_admin())
             .unwrap_or(false)
     };
-
-    // Live status/latency overrides patched in from the probe SSE stream, keyed
-    // by service id. Merged over the last fetched snapshot at render time so
-    // cards reflect probe results without waiting for a full refetch.
-    let live_status = RwSignal::new(HashMap::<i64, (String, Option<i64>)>::new());
-
-    #[cfg(target_arch = "wasm32")]
-    {
-        use wasm_bindgen::closure::Closure;
-        use wasm_bindgen::JsCast;
-        use web_sys::EventSource;
-
-        Effect::new(move |_| {
-            let es = EventSource::new("/api/v1/services/stream").ok();
-            if let Some(es) = es {
-                let on_message = Closure::wrap(Box::new(move |event: web_sys::MessageEvent| {
-                    if let Some(data) = event.data().as_string() {
-                        if let Ok(probe) = serde_json::from_str::<ProbeEventFe>(&data) {
-                            live_status.update(|m| {
-                                m.insert(probe.service_id, (probe.status, probe.latency_ms));
-                            });
-                        }
-                    }
-                }) as Box<dyn FnMut(_)>);
-
-                es.add_event_listener_with_callback("probe", on_message.as_ref().unchecked_ref())
-                    .ok();
-                on_message.forget();
-            }
-        });
-    }
 
     view! {
         <Suspense fallback=move || view! {
@@ -152,167 +112,10 @@ pub(super) fn ServiceGrid(
                         </div>
                     })
                 } else if sort_mode.get() == SortMode::Group {
-                    let group_list = groups.get().unwrap_or_default();
-                    let known_ids: std::collections::HashSet<i64> =
-                        group_list.iter().map(|g| g.id).collect();
-
-                    type Section = (String, String, String, String, String, Vec<ServiceResponse>);
-                    let mut sections_data: Vec<Section> = group_list.iter().filter_map(|grp| {
-                        let gid = grp.id;
-                        let mut members: Vec<ServiceResponse> = svcs.iter()
-                            .filter(|s| s.group_id == Some(gid))
-                            .cloned()
-                            .collect();
-                        if members.is_empty() { return None; }
-                        members.sort_by(|a, b| a.sort_order.cmp(&b.sort_order)
-                            .then_with(|| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase())));
-                        let (text_color, bg_color, border_color) = match &grp.color {
-                            Some(hex) => (hex.clone(), format!("{hex}22"), format!("{hex}50")),
-                            None => (
-                                "var(--color-accent)".to_string(),
-                                "var(--color-accent-dim)".to_string(),
-                                "rgba(59,130,246,0.3)".to_string(),
-                            ),
-                        };
-                        Some((gid.to_string(), grp.name.clone(), text_color, bg_color, border_color, members))
-                    }).collect();
-
-                    let mut ungrouped: Vec<ServiceResponse> = svcs.iter()
-                        .filter(|s| s.group_id.is_none_or(|gid| !known_ids.contains(&gid)))
-                        .cloned()
-                        .collect();
-                    if !ungrouped.is_empty() {
-                        ungrouped.sort_by(|a, b| a.sort_order.cmp(&b.sort_order)
-                            .then_with(|| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase())));
-                        sections_data.push((
-                            "ungrouped".to_string(),
-                            "Ungrouped".to_string(),
-                            "var(--color-text-muted)".to_string(),
-                            "rgba(75,85,99,0.12)".to_string(),
-                            "rgba(75,85,99,0.2)".to_string(),
-                            ungrouped,
-                        ));
-                    }
-
-                    let sections = sections_data.into_iter().map(|(sec_key, label, color, bg, border, members)| {
-                        let member_ids: Vec<i64> = members.iter().map(|s| s.id).collect();
-                        let reset_payload: Vec<(i64, i64)> = {
-                            let mut sorted = members.clone();
-                            sorted.sort_by_key(|a| a.display_name.to_lowercase());
-                            sorted.iter().enumerate().map(|(i, s)| (s.id, i as i64)).collect()
-                        };
-                        let members_with_idx: Vec<(usize, ServiceResponse)> =
-                            members.into_iter().enumerate().collect();
-                        let cards = members_with_idx.into_iter().map(|(idx, svc)| {
-                            let card = render_card(svc);
-                            let ids_for_drop = member_ids.clone();
-                            let sk_style = sec_key.clone();
-                            let sk_start = sec_key.clone();
-                            let sk_over  = sec_key.clone();
-                            let sk_leave = sec_key.clone();
-                            view! {
-                                <div
-                                    draggable="true"
-                                    style={
-                                        let sk = sk_style;
-                                        move || {
-                                            let is_over     = section_drag_over.get() == Some((sk.clone(), idx));
-                                            let is_dragging = section_drag_src.get()  == Some((sk.clone(), idx));
-                                            let mut s = "cursor:grab;".to_string();
-                                            if is_dragging { s.push_str("opacity:0.45;"); }
-                                            if is_over     { s.push_str("outline:2px solid var(--color-accent);border-radius:12px;"); }
-                                            s
-                                        }
-                                    }
-                                    on:dragstart=move |_| section_drag_src.set(Some((sk_start.clone(), idx)))
-                                    on:dragover=move |ev| {
-                                        ev.prevent_default();
-                                        section_drag_over.set(Some((sk_over.clone(), idx)));
-                                    }
-                                    on:dragleave=move |_| {
-                                        if section_drag_over.get() == Some((sk_leave.clone(), idx)) {
-                                            section_drag_over.set(None);
-                                        }
-                                    }
-                                    on:drop=move |ev| {
-                                        ev.prevent_default();
-                                        let src = section_drag_src.get();
-                                        let dst = section_drag_over.get();
-                                        section_drag_src.set(None);
-                                        section_drag_over.set(None);
-                                        if let (Some((src_sec, src_i)), Some((dst_sec, dst_i))) = (src, dst) {
-                                            if src_sec == dst_sec && src_i != dst_i {
-                                                let ids: std::collections::HashSet<i64> =
-                                                    ids_for_drop.iter().cloned().collect();
-                                                spawn_local(async move {
-                                                    if let Ok(all) = fetch_services().await {
-                                                        let mut section: Vec<ServiceResponse> = all.into_iter()
-                                                            .filter(|s| ids.contains(&s.id))
-                                                            .collect();
-                                                        section.sort_by(|a, b| a.sort_order.cmp(&b.sort_order)
-                                                            .then_with(|| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase())));
-                                                        let item = section.remove(src_i);
-                                                        section.insert(dst_i, item);
-                                                        let payload: Vec<_> = section.iter()
-                                                            .enumerate()
-                                                            .map(|(i, s)| (s.id, i as i64))
-                                                            .collect();
-                                                        let _ = reorder_services(payload).await;
-                                                        services.refetch();
-                                                    }
-                                                });
-                                            }
-                                        }
-                                    }
-                                    on:dragend=move |_| {
-                                        section_drag_src.set(None);
-                                        section_drag_over.set(None);
-                                    }
-                                >
-                                    {card}
-                                </div>
-                            }
-                        }).collect_view();
-                        view! {
-                            <div style="margin-bottom:1.75rem;">
-                                <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.75rem;">
-                                    <span style=format!(
-                                        "display:inline-flex; align-items:center; font-size:0.68rem; font-weight:700; \
-                                         letter-spacing:0.04em; text-transform:uppercase; \
-                                         color:{color}; background:{bg}; border:1px solid {border}; \
-                                         border-radius:20px; padding:3px 9px;"
-                                    )>{label}</span>
-                                    <div style="flex:1; height:1px; background:var(--color-border); opacity:0.4;"></div>
-                                    <button
-                                        title="Reset section to A-Z"
-                                        style="display:inline-flex; align-items:center; justify-content:center; \
-                                               background:none; border:none; cursor:pointer; padding:3px; \
-                                               color:var(--color-text-muted); border-radius:4px; transition:color 0.15s;"
-                                        onmouseover="this.style.color='var(--color-text-primary)'"
-                                        onmouseout="this.style.color='var(--color-text-muted)'"
-                                        on:click=move |_| {
-                                            let payload = reset_payload.clone();
-                                            spawn_local(async move {
-                                                let _ = reorder_services(payload).await;
-                                                services.refetch();
-                                            });
-                                        }
-                                    >
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                                             stroke="currentColor" stroke-width="2.2"
-                                             stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                                            <path d="M3 3v5h5"/>
-                                        </svg>
-                                    </button>
-                                </div>
-                                <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,360px)); gap:1rem; justify-content:start;">
-                                    {cards}
-                                </div>
-                            </div>
-                        }
-                    }).collect_view();
-                    EitherOf4::B(view! { <div>{sections}</div> })
+                    // Group mode is rendered entirely by the sibling `GroupSection`
+                    // component, which interleaves this group's services above its
+                    // quick links within one shared container per group.
+                    EitherOf4::B(())
                 } else if sort_mode.get() == SortMode::Source {
                     let get_src = |s: &ServiceResponse| -> String {
                         s.discovery_source.clone()

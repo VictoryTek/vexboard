@@ -3,7 +3,6 @@ pub mod icon_picker;
 pub mod metric_bar;
 pub mod modal_edit;
 pub mod modal_groups;
-pub mod modal_quick_link_groups;
 pub mod quick_link_card;
 pub mod quick_link_modal;
 pub mod service_card;

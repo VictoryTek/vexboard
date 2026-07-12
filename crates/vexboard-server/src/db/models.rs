@@ -179,32 +179,6 @@ pub struct CreateQuickLink {
     pub sort_order: Option<i64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, utoipa::ToSchema)]
-pub struct QuickLinkGroup {
-    pub id: i64,
-    pub name: String,
-    pub icon: Option<String>,
-    pub color: Option<String>,
-    pub sort_order: i64,
-    pub created_at: Option<NaiveDateTime>,
-}
-
-#[derive(Debug, Deserialize, utoipa::ToSchema)]
-pub struct CreateQuickLinkGroup {
-    pub name: String,
-    pub icon: Option<String>,
-    pub color: Option<String>,
-    pub sort_order: Option<i64>,
-}
-
-#[derive(Debug, Deserialize, utoipa::ToSchema)]
-pub struct UpdateQuickLinkGroup {
-    pub name: Option<String>,
-    pub icon: Option<String>,
-    pub color: Option<String>,
-    pub sort_order: Option<i64>,
-}
-
 #[derive(Debug, Clone, Serialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct AuditEvent {
     pub id: i64,

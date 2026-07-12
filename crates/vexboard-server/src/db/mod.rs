@@ -95,7 +95,106 @@ pub(crate) async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
     let unique_unit_sql = include_str!("migrations/007_unique_systemd_unit.sql");
     sqlx::raw_sql(unique_unit_sql).execute(pool).await?;
 
+    // Unify quick_link_groups into groups (008) — idempotent, guarded by quick_link_groups
+    // still existing (it's dropped as the final step of the migration).
+    let has_quick_link_groups: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'quick_link_groups'",
+    )
+    .fetch_one(pool)
+    .await?;
+
+    if has_quick_link_groups > 0 {
+        unify_quick_link_groups(pool).await?;
+    }
+
     tracing::info!("Database migrations applied");
+    Ok(())
+}
+
+/// One-time migration (008): copy every `quick_link_groups` row into the unified `groups`
+/// table (renaming on name collision), remap `quick_links.group_id` to the new ids, rebuild
+/// `quick_links` so its FK targets `groups` instead of the removed table, then drop
+/// `quick_link_groups`. Runs inside a transaction so a failure partway through leaves the
+/// pre-migration schema intact.
+async fn unify_quick_link_groups(pool: &SqlitePool) -> anyhow::Result<()> {
+    let mut tx = pool.begin().await?;
+
+    type OldGroupRow = (i64, String, Option<String>, Option<String>, i64);
+    let old_groups: Vec<OldGroupRow> = sqlx::query_as(
+        "SELECT id, name, icon, color, sort_order FROM quick_link_groups ORDER BY id",
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+
+    let mut id_map: Vec<(i64, i64)> = Vec::with_capacity(old_groups.len());
+
+    for (old_id, name, icon, color, sort_order) in old_groups {
+        let mut final_name = name.clone();
+        let mut suffix = 2;
+        loop {
+            let exists: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM groups WHERE name = ?")
+                .bind(&final_name)
+                .fetch_one(&mut *tx)
+                .await?;
+            if exists == 0 {
+                break;
+            }
+            final_name = format!("{name} ({suffix})");
+            suffix += 1;
+        }
+
+        let new_id: i64 = sqlx::query_scalar(
+            "INSERT INTO groups (name, icon, color, sort_order) VALUES (?, ?, ?, ?) RETURNING id",
+        )
+        .bind(&final_name)
+        .bind(&icon)
+        .bind(&color)
+        .bind(sort_order)
+        .fetch_one(&mut *tx)
+        .await?;
+
+        id_map.push((old_id, new_id));
+    }
+
+    // Create quick_links_new with group_id referencing groups(id).
+    let create_sql = include_str!("migrations/008_unify_groups.sql");
+    sqlx::raw_sql(create_sql).execute(&mut *tx).await?;
+
+    // Copy quick_links into quick_links_new, remapping group_id from old
+    // quick_link_groups ids to the new groups ids inline via a CASE expression
+    // evaluated against the *source* row — this way every value written to
+    // quick_links_new.group_id is already a valid groups.id (or NULL), so the
+    // new table's FK constraint is never violated during the copy. (Updating
+    // quick_links.group_id in place first, before the FK target changes, would
+    // fail: the old column still references quick_link_groups(id), and the new
+    // ids only exist in groups.)
+    let case_expr = if id_map.is_empty() {
+        // No quick_link_groups rows existed to remap (the common case for
+        // installs that never created one) — every group_id is already NULL.
+        "NULL".to_string()
+    } else {
+        let mut expr = "CASE group_id ".to_string();
+        for (old_id, new_id) in &id_map {
+            expr.push_str(&format!("WHEN {old_id} THEN {new_id} "));
+        }
+        expr.push_str("ELSE NULL END");
+        expr
+    };
+    let copy_sql = format!(
+        "INSERT INTO quick_links_new (id, title, url, icon, description, sort_order, group_id, created_at, updated_at) \
+         SELECT id, title, url, icon, description, sort_order, {case_expr}, created_at, updated_at FROM quick_links;"
+    );
+    sqlx::raw_sql(&copy_sql).execute(&mut *tx).await?;
+
+    sqlx::raw_sql("DROP TABLE quick_links; ALTER TABLE quick_links_new RENAME TO quick_links;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::raw_sql("DROP TABLE quick_link_groups;")
+        .execute(&mut *tx)
+        .await?;
+
+    tx.commit().await?;
     Ok(())
 }
 

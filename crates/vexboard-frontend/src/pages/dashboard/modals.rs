@@ -3,24 +3,18 @@ use leptos::task::spawn_local;
 
 use crate::components::modal_edit::{EditFormData, EditModal};
 use crate::components::modal_groups::GroupsModal;
-use crate::components::modal_quick_link_groups::QuickLinkGroupsModal;
 use crate::components::quick_link_modal::{QuickLinkFormData, QuickLinkModal};
 
-use super::{
-    resolve_groups, resolve_quick_link_groups, GroupResponse, QuickLinkGroupResponse,
-    QuickLinkResponse, ServiceResponse,
-};
+use super::{resolve_groups, GroupResponse, QuickLinkResponse, ServiceResponse};
 
 #[component]
 pub(super) fn DashboardModals(
     services: LocalResource<Vec<ServiceResponse>>,
     quick_links: LocalResource<Vec<QuickLinkResponse>>,
     groups: LocalResource<Vec<GroupResponse>>,
-    quick_link_groups: LocalResource<Vec<QuickLinkGroupResponse>>,
     show_modal: RwSignal<bool>,
     show_add_link_modal: RwSignal<bool>,
     show_groups_modal: RwSignal<bool>,
-    show_quick_link_groups_modal: RwSignal<bool>,
     edit_target: RwSignal<Option<(i64, EditFormData)>>,
     edit_link_target: RwSignal<Option<(i64, QuickLinkFormData)>>,
 ) -> impl IntoView {
@@ -65,14 +59,7 @@ pub(super) fn DashboardModals(
         <GroupsModal
             visible=show_groups_modal
             on_close=Callback::new(move |_| show_groups_modal.set(false))
-            on_saved=Callback::new(move |_| { groups.refetch(); services.refetch(); })
-        />
-
-        // Quick link group management modal
-        <QuickLinkGroupsModal
-            visible=show_quick_link_groups_modal
-            on_close=Callback::new(move |_| show_quick_link_groups_modal.set(false))
-            on_saved=Callback::new(move |_| { quick_link_groups.refetch(); quick_links.refetch(); })
+            on_saved=Callback::new(move |_| { groups.refetch(); services.refetch(); quick_links.refetch(); })
         />
 
         // Add service modal — reactive wrapper so groups prop updates when resource loads
@@ -91,7 +78,7 @@ pub(super) fn DashboardModals(
                 visible=show_add_link_modal
                 on_close=Callback::new(move |_| show_add_link_modal.set(false))
                 on_save=on_save_link
-                groups=resolve_quick_link_groups(&quick_link_groups)
+                groups=resolve_groups(&groups)
             />
         }}
 
@@ -131,7 +118,7 @@ pub(super) fn DashboardModals(
 
         // Edit quick link modal
         {move || edit_link_target.get().map(|(id, initial)| {
-            let group_items = resolve_quick_link_groups(&quick_link_groups);
+            let group_items = resolve_groups(&groups);
             let (show_edit, set_show_edit) = signal(true);
             let on_edit_save = Callback::new(move |data: QuickLinkFormData| {
                 spawn_local(async move {
