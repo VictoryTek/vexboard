@@ -39,6 +39,10 @@ mode = "session"
 # relevant when the server is built with the `pam-auth` feature). Every other
 # successfully PAM-authenticated user gets the viewer role.
 #   pam_admin_users = ["alice", "bob"]
+# Bootstrap: if this list is left empty, the very first successful PAM login
+# (across the lifetime of this database) is granted a one-time admin role so a
+# fresh install always has a way to reach the admin UI. Every login after that
+# first one gets viewer until you populate this list explicitly.
 pam_admin_users = []
 
 [discovery]

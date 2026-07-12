@@ -111,13 +111,37 @@ async fn login_pam(
         if let Err(e) = session.insert("username", payload.username.clone()).await {
             tracing::error!("failed to persist session after login: {e}");
         }
-        let role = if state
-            .config
-            .auth
-            .pam_admin_users
-            .iter()
-            .any(|u| u == &payload.username)
+        let role = if !state.config.auth.pam_admin_users.is_empty() {
+            if state
+                .config
+                .auth
+                .pam_admin_users
+                .iter()
+                .any(|u| u == &payload.username)
+            {
+                "admin"
+            } else {
+                "viewer"
+            }
+        } else if db::try_claim_setting(&state.db, "pam_bootstrap_admin", &payload.username)
+            .await
+            .unwrap_or(false)
         {
+            tracing::warn!(
+                "auth.pam_admin_users is empty; granting one-time bootstrap admin to '{}'. \
+                 Set auth.pam_admin_users to make this permanent and stop further implicit grants.",
+                payload.username
+            );
+            db::audit::insert(
+                &state.db,
+                &payload.username,
+                "auth.pam_bootstrap_admin_granted",
+                None,
+                None,
+                None,
+                Some(ip),
+            )
+            .await;
             "admin"
         } else {
             "viewer"

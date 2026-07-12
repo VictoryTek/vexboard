@@ -227,6 +227,46 @@ async fn test_health_check() {
 }
 
 // ---------------------------------------------------------------------------
+// db::try_claim_setting — atomic one-time flag used for PAM bootstrap admin
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_try_claim_setting_first_caller_wins() {
+    let app = TestApp::new().await;
+
+    let claimed = crate::db::try_claim_setting(&app.pool, "pam_bootstrap_admin", "alice")
+        .await
+        .unwrap();
+    assert!(claimed, "first claim should succeed");
+
+    let value = crate::db::get_setting(&app.pool, "pam_bootstrap_admin")
+        .await
+        .unwrap();
+    assert_eq!(value.as_deref(), Some("alice"));
+}
+
+#[tokio::test]
+async fn test_try_claim_setting_second_caller_loses() {
+    let app = TestApp::new().await;
+
+    let first = crate::db::try_claim_setting(&app.pool, "pam_bootstrap_admin", "alice")
+        .await
+        .unwrap();
+    assert!(first);
+
+    let second = crate::db::try_claim_setting(&app.pool, "pam_bootstrap_admin", "bob")
+        .await
+        .unwrap();
+    assert!(!second, "second claim should lose to the first");
+
+    // Value stays whatever the first (winning) caller wrote.
+    let value = crate::db::get_setting(&app.pool, "pam_bootstrap_admin")
+        .await
+        .unwrap();
+    assert_eq!(value.as_deref(), Some("alice"));
+}
+
+// ---------------------------------------------------------------------------
 // Auth — login
 // ---------------------------------------------------------------------------
 

@@ -219,3 +219,26 @@ pub async fn set_setting(pool: &SqlitePool, key: &str, value: &str) -> anyhow::R
     .await?;
     Ok(())
 }
+
+/// Atomically claim a one-time settings flag. Returns `true` if this call performed the
+/// insert (the flag was previously unset and is now claimed by `value`), `false` if another
+/// caller already claimed it first. Used for the PAM bootstrap-admin grant, where exactly one
+/// implicit admin may ever be created.
+///
+/// Only called from `login_pam` (gated behind the `pam-auth` feature), so it appears unused to
+/// a default (non-pam-auth) `cargo clippy` invocation even though it's exercised directly by
+/// tests below.
+#[allow(dead_code)]
+pub async fn try_claim_setting(pool: &SqlitePool, key: &str, value: &str) -> anyhow::Result<bool> {
+    let result = sqlx::query("INSERT INTO settings (key, value) VALUES (?, ?)")
+        .bind(key)
+        .bind(value)
+        .execute(pool)
+        .await;
+
+    match result {
+        Ok(_) => Ok(true),
+        Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => Ok(false),
+        Err(e) => Err(e.into()),
+    }
+}
