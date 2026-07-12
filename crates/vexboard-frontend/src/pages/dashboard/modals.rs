@@ -72,15 +72,15 @@ pub(super) fn DashboardModals(
             />
         }}
 
-        // Add quick link modal — reactive wrapper so groups prop updates when resource loads
-        {move || view! {
+        // Add quick link modal — fresh instance per open so form state doesn't leak between adds
+        {move || show_add_link_modal.get().then(|| view! {
             <QuickLinkModal
                 visible=show_add_link_modal
                 on_close=Callback::new(move |_| show_add_link_modal.set(false))
                 on_save=on_save_link
                 groups=resolve_groups(&groups)
             />
-        }}
+        })}
 
         // Edit service modal
         {move || edit_target.get().map(|(id, initial)| {
