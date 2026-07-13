@@ -99,11 +99,14 @@ pub fn ServiceCard(
 ) -> impl IntoView {
     let service_id = service.id;
     let probe_enabled = service.probe_enabled;
-    let history = LocalResource::new(move || async move {
-        if probe_enabled {
-            fetch_history(service_id).await
-        } else {
-            Vec::new()
+    let history = LocalResource::new(move || {
+        let _trigger = live_status.with(|m| m.get(&service_id).cloned());
+        async move {
+            if probe_enabled {
+                fetch_history(service_id).await
+            } else {
+                Vec::new()
+            }
         }
     });
 
