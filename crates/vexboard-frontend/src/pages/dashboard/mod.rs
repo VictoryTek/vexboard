@@ -33,39 +33,45 @@ pub(super) enum SortMode {
     Group,
 }
 
-#[cfg(target_arch = "wasm32")]
-fn load_sort_mode_from_storage() -> SortMode {
-    web_sys::window()
-        .and_then(|w| w.local_storage().ok().flatten())
-        .and_then(|s| s.get_item("vexboard_sort_mode").ok().flatten())
-        .map(|v| match v.as_str() {
-            "source" => SortMode::Source,
-            "group" => SortMode::Group,
-            _ => SortMode::AZ,
-        })
-        .unwrap_or(SortMode::AZ)
+#[derive(Debug, serde::Deserialize)]
+struct MeUserSortMode {
+    dashboard_sort_mode: Option<String>,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-#[allow(dead_code)]
-fn load_sort_mode_from_storage() -> SortMode {
-    SortMode::AZ
+#[derive(Debug, serde::Deserialize)]
+struct MeSortModeWrapper {
+    user: MeUserSortMode,
 }
 
-#[cfg(target_arch = "wasm32")]
-fn save_sort_mode_to_storage(mode: &SortMode) {
+async fn fetch_sort_mode() -> SortMode {
+    match gloo_net::http::Request::get("/api/v1/auth/me").send().await {
+        Ok(r) if r.ok() => r
+            .json::<MeSortModeWrapper>()
+            .await
+            .ok()
+            .and_then(|w| w.user.dashboard_sort_mode)
+            .map(|s| match s.as_str() {
+                "source" => SortMode::Source,
+                "group" => SortMode::Group,
+                _ => SortMode::AZ,
+            })
+            .unwrap_or(SortMode::AZ),
+        _ => SortMode::AZ,
+    }
+}
+
+async fn save_sort_mode(mode: SortMode) {
     let val = match mode {
         SortMode::AZ => "az",
         SortMode::Source => "source",
         SortMode::Group => "group",
     };
-    web_sys::window()
-        .and_then(|w| w.local_storage().ok().flatten())
-        .map(|s| s.set_item("vexboard_sort_mode", val).ok());
+    if let Ok(req) = gloo_net::http::Request::put("/api/v1/auth/me/sort-mode")
+        .json(&serde_json::json!({ "sort_mode": val }))
+    {
+        let _ = req.send().await;
+    }
 }
-
-#[cfg(not(target_arch = "wasm32"))]
-fn save_sort_mode_to_storage(_mode: &SortMode) {}
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub(super) struct ServiceResponse {
@@ -136,7 +142,14 @@ pub fn DashboardPage() -> impl IntoView {
     let show_add_link_modal: RwSignal<bool> = RwSignal::new(false);
     let show_groups_modal: RwSignal<bool> = RwSignal::new(false);
     let (show_add_menu, set_show_add_menu) = signal(false);
-    let (sort_mode, set_sort_mode) = signal(load_sort_mode_from_storage());
+    let (sort_mode, set_sort_mode) = signal(SortMode::AZ);
+
+    let sort_mode_loaded = LocalResource::new(|| async move { fetch_sort_mode().await });
+    Effect::new(move |_| {
+        if let Some(mode) = sort_mode_loaded.get() {
+            set_sort_mode.set(mode);
+        }
+    });
 
     let drag_src_idx: RwSignal<Option<usize>> = RwSignal::new(None);
     let drag_over_idx: RwSignal<Option<usize>> = RwSignal::new(None);
@@ -222,7 +235,9 @@ pub fn DashboardPage() -> impl IntoView {
                                 }
                                 on:click=move |_| {
                                     set_sort_mode.set(mode);
-                                    save_sort_mode_to_storage(&mode);
+                                    spawn_local(async move {
+                                        save_sort_mode(mode).await;
+                                    });
                                 }
                             >
                                 {label}

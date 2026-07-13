@@ -189,6 +189,24 @@ impl TestApp {
         (status, body)
     }
 
+    async fn put_json(&self, uri: &str, payload: Value, cookie: &str) -> (StatusCode, Value) {
+        let mut builder = Request::builder()
+            .method("PUT")
+            .uri(uri)
+            .header("content-type", "application/json");
+        if !cookie.is_empty() {
+            builder = builder.header("cookie", cookie);
+        }
+        let req = builder.body(Body::from(payload.to_string())).unwrap();
+        let resp = self.app.clone().oneshot(req).await.unwrap();
+        let status = resp.status();
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+        (status, body)
+    }
+
     async fn delete_req(&self, uri: &str, cookie: &str) -> (StatusCode, Value) {
         let mut builder = Request::builder().method("DELETE").uri(uri);
         if !cookie.is_empty() {
@@ -325,6 +343,70 @@ async fn test_me_authenticated_returns_username_and_role() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["user"]["username"], "alice");
     assert_eq!(body["user"]["role"], "admin");
+}
+
+// ---------------------------------------------------------------------------
+// Auth — dashboard sort mode preference
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_sort_mode_defaults_to_az_when_unset() {
+    let app = TestApp::new().await;
+    app.seed_admin("alice", "password123").await;
+    let (_, cookie) = app.login("alice", "password123").await;
+
+    let (status, body) = app.get_json("/api/v1/auth/me", &cookie).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["user"]["dashboard_sort_mode"], "az");
+}
+
+#[tokio::test]
+async fn test_update_sort_mode_persists_and_reflects_in_me() {
+    let app = TestApp::new().await;
+    app.seed_admin("alice", "password123").await;
+    let (_, cookie) = app.login("alice", "password123").await;
+
+    let (status, _) = app
+        .put_json(
+            "/api/v1/auth/me/sort-mode",
+            serde_json::json!({"sort_mode": "group"}),
+            &cookie,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (_, body) = app.get_json("/api/v1/auth/me", &cookie).await;
+    assert_eq!(body["user"]["dashboard_sort_mode"], "group");
+}
+
+#[tokio::test]
+async fn test_update_sort_mode_rejects_invalid_value() {
+    let app = TestApp::new().await;
+    app.seed_admin("alice", "password123").await;
+    let (_, cookie) = app.login("alice", "password123").await;
+
+    let (status, _) = app
+        .put_json(
+            "/api/v1/auth/me/sort-mode",
+            serde_json::json!({"sort_mode": "bogus"}),
+            &cookie,
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_update_sort_mode_unauthenticated_returns_401() {
+    let app = TestApp::new().await;
+
+    let (status, _) = app
+        .put_json(
+            "/api/v1/auth/me/sort-mode",
+            serde_json::json!({"sort_mode": "group"}),
+            "",
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
 
 // ---------------------------------------------------------------------------

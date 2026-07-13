@@ -2,10 +2,9 @@ use axum::{
     extract::{ConnectInfo, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
-    routing::{get, post},
+    routing::{get, post, put},
     Json, Router,
 };
-#[cfg(not(all(unix, feature = "pam-auth")))]
 use serde::Deserialize;
 use serde_json::json;
 use std::net::{IpAddr, SocketAddr};
@@ -20,6 +19,7 @@ pub fn router() -> Router<AppState> {
         .route("/login", post(login))
         .route("/logout", post(logout))
         .route("/me", get(me).patch(update_me))
+        .route("/me/sort-mode", put(update_sort_mode))
 }
 
 /// Extract the client IP from ConnectInfo, honoring X-Forwarded-For's last hop
@@ -307,7 +307,7 @@ pub(crate) async fn logout(State(state): State<AppState>, session: Session) -> i
     )
 )]
 #[tracing::instrument(skip_all)]
-pub(crate) async fn me(session: Session) -> impl IntoResponse {
+pub(crate) async fn me(State(state): State<AppState>, session: Session) -> impl IntoResponse {
     match session.get::<String>("username").await {
         Ok(Some(username)) => {
             #[cfg(all(unix, feature = "pam-auth"))]
@@ -323,11 +323,21 @@ pub(crate) async fn me(session: Session) -> impl IntoResponse {
                 .flatten()
                 .unwrap_or_else(|| "viewer".to_string());
 
+            let dashboard_sort_mode =
+                db::get_setting(&state.db, &format!("dashboard_sort_mode:{username}"))
+                    .await
+                    .ok()
+                    .flatten()
+                    .unwrap_or_else(|| "az".to_string());
+
             (
                 StatusCode::OK,
-                Json(
-                    json!({ "user": { "username": username, "role": role, "auth_mode": auth_mode } }),
-                ),
+                Json(json!({ "user": {
+                    "username": username,
+                    "role": role,
+                    "auth_mode": auth_mode,
+                    "dashboard_sort_mode": dashboard_sort_mode,
+                } })),
             )
         }
         _ => (
@@ -504,6 +514,65 @@ pub(crate) async fn update_me(
     )
     .await;
     session.flush().await.ok();
+
+    (StatusCode::OK, Json(json!({"ok": true})))
+}
+
+// ---------------------------------------------------------------------------
+// update_sort_mode
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub(crate) struct UpdateSortModeRequest {
+    sort_mode: String,
+}
+
+#[utoipa::path(
+    put,
+    path = "/api/v1/auth/me/sort-mode",
+    tag = "auth",
+    security(("cookieAuth" = [])),
+    request_body = UpdateSortModeRequest,
+    responses(
+        (status = 200, description = "Sort mode preference updated"),
+        (status = 400, description = "Invalid sort_mode value"),
+        (status = 401, description = "Not authenticated"),
+        (status = 500, description = "Database error"),
+    )
+)]
+#[tracing::instrument(skip_all)]
+pub(crate) async fn update_sort_mode(
+    State(state): State<AppState>,
+    session: Session,
+    Json(payload): Json<UpdateSortModeRequest>,
+) -> impl IntoResponse {
+    let username = match session.get::<String>("username").await {
+        Ok(Some(u)) => u,
+        _ => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({"error": "Not authenticated"})),
+            )
+        }
+    };
+
+    if !matches!(payload.sort_mode.as_str(), "az" | "source" | "group") {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "invalid sort_mode"})),
+        );
+    }
+
+    let key = format!("dashboard_sort_mode:{username}");
+    if db::set_setting(&state.db, &key, &payload.sort_mode)
+        .await
+        .is_err()
+    {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "Database error"})),
+        );
+    }
 
     (StatusCode::OK, Json(json!({"ok": true})))
 }
