@@ -63,15 +63,15 @@ pub(super) fn DashboardModals(
             on_saved=Callback::new(move |_| { groups.refetch(); services.refetch(); quick_links.refetch(); })
         />
 
-        // Add service modal — reactive wrapper so groups prop updates when resource loads
-        {move || view! {
+        // Add service modal — fresh instance per open so form state doesn't leak between adds
+        {move || show_modal.get().then(|| view! {
             <EditModal
                 visible=show_modal
                 on_close=Callback::new(move |_| show_modal.set(false))
                 on_save=on_save
                 groups=resolve_groups(&groups)
             />
-        }}
+        })}
 
         // Add quick link modal — fresh instance per open so form state doesn't leak between adds
         {move || show_add_link_modal.get().then(|| view! {
