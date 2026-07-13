@@ -94,6 +94,11 @@ impl TestApp {
                 .tls_certs_only(std::iter::empty())
                 .build()
                 .unwrap(),
+            probe_client_insecure: reqwest::Client::builder()
+                .tls_certs_only(std::iter::empty())
+                .danger_accept_invalid_certs(true)
+                .build()
+                .unwrap(),
             login_limiter: Arc::new(LoginRateLimiter::new(0, 60)),
             session_store: session_store.clone(),
         };

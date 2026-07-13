@@ -26,6 +26,7 @@ pub struct Service {
     pub probe_interval: i64,
     pub tags: Option<String>,
     pub visible: bool,
+    pub skip_tls_verify: bool,
     pub created_at: Option<NaiveDateTime>,
     pub updated_at: Option<NaiveDateTime>,
 }
@@ -65,6 +66,7 @@ pub struct CreateService {
     pub probe_interval: Option<i64>,
     pub tags: Option<Vec<String>>,
     pub visible: Option<bool>,
+    pub skip_tls_verify: Option<bool>,
 }
 
 /// Distinguishes "field omitted" (`None`) from "field explicitly `null`" (`Some(None)`) in a
@@ -95,6 +97,7 @@ pub struct UpdateService {
     pub probe_interval: Option<i64>,
     pub tags: Option<Vec<String>>,
     pub visible: Option<bool>,
+    pub skip_tls_verify: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]

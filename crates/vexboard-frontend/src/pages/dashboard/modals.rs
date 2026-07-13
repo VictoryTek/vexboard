@@ -28,6 +28,7 @@ pub(super) fn DashboardModals(
                 "group_id": data.group_id,
                 "probe_enabled": data.probe_enabled,
                 "probe_interval": data.probe_interval,
+                "skip_tls_verify": data.skip_tls_verify,
             });
             if let Ok(req) = gloo_net::http::Request::post("/api/v1/services").json(&body) {
                 let _ = req.send().await;
@@ -96,6 +97,7 @@ pub(super) fn DashboardModals(
                         "group_id": data.group_id,
                         "probe_enabled": data.probe_enabled,
                         "probe_interval": data.probe_interval,
+                        "skip_tls_verify": data.skip_tls_verify,
                     });
                     if let Ok(req) = gloo_net::http::Request::put(&format!("/api/v1/services/{id}")).json(&body) {
                         let _ = req.send().await;

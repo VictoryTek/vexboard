@@ -49,6 +49,7 @@ pub(super) fn GroupSection(
             group_id: svc.group_id,
             probe_enabled: svc.probe_enabled,
             probe_interval: svc.probe_interval,
+            skip_tls_verify: svc.skip_tls_verify,
         };
         let data = ServiceData {
             id: svc.id,

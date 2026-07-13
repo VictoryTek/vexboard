@@ -15,6 +15,7 @@ pub async fn start_probe_loop(
     config: ProbeConfig,
     status_tx: broadcast::Sender<uptime::ProbeEvent>,
     client: reqwest::Client,
+    insecure_client: reqwest::Client,
 ) {
     tracing::info!("Starting uptime probe scheduler");
 
@@ -29,7 +30,7 @@ pub async fn start_probe_loop(
         // Fetch all services that have probing enabled and either a URL or a systemd unit
         let services = sqlx::query_as::<_, crate::db::models::Service>(
             "SELECT id, systemd_unit, discovery_source, display_name, description, url, icon, group_id, \
-             sort_order, probe_enabled, probe_interval, tags, visible, created_at, updated_at \
+             sort_order, probe_enabled, probe_interval, tags, visible, skip_tls_verify, created_at, updated_at \
              FROM services WHERE probe_enabled = 1 AND (url IS NOT NULL OR systemd_unit IS NOT NULL)",
         )
         .fetch_all(&db)
@@ -51,6 +52,7 @@ pub async fn start_probe_loop(
                 let db = db.clone();
                 let tx = status_tx.clone();
                 let client = client.clone();
+                let insecure_client = insecure_client.clone();
                 let max_history = config.max_history;
 
                 tokio::spawn(async move {
@@ -66,7 +68,12 @@ pub async fn start_probe_loop(
                     if use_systemd {
                         uptime::probe_systemd_unit(&db, &svc, max_history, &tx).await;
                     } else if svc.url.is_some() {
-                        uptime::probe_service(&db, &svc, &client, max_history, &tx).await;
+                        let client = if svc.skip_tls_verify {
+                            &insecure_client
+                        } else {
+                            &client
+                        };
+                        uptime::probe_service(&db, &svc, client, max_history, &tx).await;
                     }
                 });
             }

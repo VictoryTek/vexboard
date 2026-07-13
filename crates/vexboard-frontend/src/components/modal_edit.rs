@@ -34,6 +34,7 @@ pub struct EditFormData {
     pub group_id: Option<i64>,
     pub probe_enabled: bool,
     pub probe_interval: i64,
+    pub skip_tls_verify: bool,
 }
 
 #[component]
@@ -53,6 +54,7 @@ pub fn EditModal(
         group_id: None,
         probe_enabled: true,
         probe_interval: 30,
+        skip_tls_verify: false,
     });
     let initial_probe_enabled = initial.probe_enabled;
     let initial_probe_interval = initial.probe_interval;
@@ -62,6 +64,7 @@ pub fn EditModal(
     let (url, set_url) = signal(initial.url);
     let (icon, set_icon) = signal(initial.icon);
     let (selected_group_id, set_selected_group_id) = signal(initial.group_id);
+    let (skip_tls_verify, set_skip_tls_verify) = signal(initial.skip_tls_verify);
     // true = icon was auto-derived from the URL, false = user manually set it
     let (icon_auto, set_icon_auto) = signal(true);
 
@@ -151,6 +154,15 @@ pub fn EditModal(
                                 set_icon.set(url);
                             } />
                         </div>
+                        <div style="display:flex; align-items:center; gap:0.5rem;">
+                            <input type="checkbox" id="skip-tls-verify"
+                                prop:checked=move || skip_tls_verify.get()
+                                on:change=move |ev| set_skip_tls_verify.set(event_target_checked(&ev))
+                            />
+                            <label class="form-label" for="skip-tls-verify" style="margin:0;">
+                                "Skip TLS certificate verification (self-signed certs)"
+                            </label>
+                        </div>
                         // Group selector — only rendered when groups are available
                         {if !groups.is_empty() {
                             let groups = groups.clone();
@@ -202,6 +214,7 @@ pub fn EditModal(
                                 group_id: selected_group_id.get(),
                                 probe_enabled: initial_probe_enabled,
                                 probe_interval: initial_probe_interval,
+                                skip_tls_verify: skip_tls_verify.get(),
                             });
                         }>
                             "Save"

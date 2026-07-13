@@ -119,6 +119,7 @@ pub fn DiscoveryPanel(#[prop(into)] on_added: Callback<()>) -> impl IntoView {
                 "group_id": data.group_id,
                 "probe_enabled": data.probe_enabled,
                 "probe_interval": data.probe_interval,
+                "skip_tls_verify": data.skip_tls_verify,
             });
             if let Ok(req) = gloo_net::http::Request::post("/api/v1/services").json(&body) {
                 let _ = req.send().await;
@@ -145,6 +146,7 @@ pub fn DiscoveryPanel(#[prop(into)] on_added: Callback<()>) -> impl IntoView {
                 group_id: None,
                 probe_enabled: true,
                 probe_interval: 30,
+                skip_tls_verify: false,
             };
             let group_items: Vec<GroupItem> = groups
                 .get()

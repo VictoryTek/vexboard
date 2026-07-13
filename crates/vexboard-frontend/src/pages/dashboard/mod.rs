@@ -82,6 +82,7 @@ pub(super) struct ServiceResponse {
     pub latency_ms: Option<i64>,
     pub probe_enabled: bool,
     pub probe_interval: i64,
+    pub skip_tls_verify: bool,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]

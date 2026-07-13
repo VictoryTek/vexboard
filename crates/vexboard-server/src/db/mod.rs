@@ -107,6 +107,18 @@ pub(crate) async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
         unify_quick_link_groups(pool).await?;
     }
 
+    // Add skip_tls_verify column to services (009_skip_tls_verify.sql) — idempotent.
+    let has_skip_tls_verify: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pragma_table_info('services') WHERE name = 'skip_tls_verify'",
+    )
+    .fetch_one(pool)
+    .await?;
+
+    if has_skip_tls_verify == 0 {
+        let skip_tls_verify_sql = include_str!("migrations/009_skip_tls_verify.sql");
+        sqlx::raw_sql(skip_tls_verify_sql).execute(pool).await?;
+    }
+
     tracing::info!("Database migrations applied");
     Ok(())
 }

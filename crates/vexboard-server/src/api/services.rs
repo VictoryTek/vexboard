@@ -73,7 +73,7 @@ pub fn admin_router() -> Router<AppState> {
 pub(crate) async fn list_services(State(state): State<AppState>) -> impl IntoResponse {
     let svcs = match sqlx::query_as::<_, Service>(
         "SELECT id, systemd_unit, discovery_source, display_name, description, url, icon, group_id, \
-         sort_order, probe_enabled, probe_interval, tags, visible, created_at, updated_at \
+         sort_order, probe_enabled, probe_interval, tags, visible, skip_tls_verify, created_at, updated_at \
          FROM services WHERE visible = 1 ORDER BY sort_order ASC",
     )
     .fetch_all(&state.db)
@@ -249,8 +249,8 @@ pub(crate) async fn create_service(
 
     let result = sqlx::query(
            "INSERT INTO services (systemd_unit, discovery_source, display_name, description, url, icon, group_id, \
-            sort_order, probe_enabled, probe_interval, tags, visible) \
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            sort_order, probe_enabled, probe_interval, tags, visible, skip_tls_verify) \
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&payload.systemd_unit)
         .bind(&payload.discovery_source)
@@ -264,6 +264,7 @@ pub(crate) async fn create_service(
     .bind(payload.probe_interval.unwrap_or(30))
     .bind(&tags_json)
     .bind(payload.visible.unwrap_or(true))
+    .bind(payload.skip_tls_verify.unwrap_or(false))
     .execute(&state.db)
     .await;
 
@@ -276,12 +277,13 @@ pub(crate) async fn create_service(
             let probe_db = state.db.clone();
             let probe_tx = state.probe_tx.clone();
             let probe_client = state.probe_client.clone();
+            let probe_client_insecure = state.probe_client_insecure.clone();
             let max_history = state.config.probe.max_history;
             tokio::spawn(async move {
                 if let Ok(Some(svc)) = sqlx::query_as::<_, Service>(
                     "SELECT id, systemd_unit, discovery_source, display_name, description, url, \
                      icon, group_id, sort_order, probe_enabled, probe_interval, tags, visible, \
-                     created_at, updated_at FROM services WHERE id = ? AND probe_enabled = 1",
+                     skip_tls_verify, created_at, updated_at FROM services WHERE id = ? AND probe_enabled = 1",
                 )
                 .bind(new_id)
                 .fetch_optional(&probe_db)
@@ -300,14 +302,13 @@ pub(crate) async fn create_service(
                         probe::uptime::probe_systemd_unit(&probe_db, &svc, max_history, &probe_tx)
                             .await;
                     } else if svc.url.is_some() {
-                        probe::uptime::probe_service(
-                            &probe_db,
-                            &svc,
-                            &probe_client,
-                            max_history,
-                            &probe_tx,
-                        )
-                        .await;
+                        let client = if svc.skip_tls_verify {
+                            &probe_client_insecure
+                        } else {
+                            &probe_client
+                        };
+                        probe::uptime::probe_service(&probe_db, &svc, client, max_history, &probe_tx)
+                            .await;
                     }
                 }
             });
@@ -376,7 +377,7 @@ pub(crate) async fn update_service(
     // For simplicity, do a full update with fetched defaults
     let existing = sqlx::query_as::<_, Service>(
         "SELECT id, systemd_unit, discovery_source, display_name, description, url, icon, group_id, \
-         sort_order, probe_enabled, probe_interval, tags, visible, created_at, updated_at \
+         sort_order, probe_enabled, probe_interval, tags, visible, skip_tls_verify, created_at, updated_at \
          FROM services WHERE id = ?",
     )
     .bind(id)
@@ -422,6 +423,7 @@ pub(crate) async fn update_service(
     let probe_enabled = payload.probe_enabled.unwrap_or(existing.probe_enabled);
     let probe_interval = payload.probe_interval.unwrap_or(existing.probe_interval);
     let visible = payload.visible.unwrap_or(existing.visible);
+    let skip_tls_verify = payload.skip_tls_verify.unwrap_or(existing.skip_tls_verify);
     let tags_json = match payload.tags {
         Some(t) => match serde_json::to_string(&t) {
             Ok(j) => Some(j),
@@ -439,7 +441,7 @@ pub(crate) async fn update_service(
     let result = sqlx::query(
         "UPDATE services SET discovery_source = ?, display_name = ?, description = ?, url = ?, icon = ?, \
          group_id = ?, sort_order = ?, probe_enabled = ?, probe_interval = ?, \
-         tags = ?, visible = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+         tags = ?, visible = ?, skip_tls_verify = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
     )
     .bind(&discovery_source)
     .bind(&display_name)
@@ -452,6 +454,7 @@ pub(crate) async fn update_service(
     .bind(probe_interval)
     .bind(&tags_json)
     .bind(visible)
+    .bind(skip_tls_verify)
     .bind(id)
     .execute(&state.db)
     .await;

@@ -117,6 +117,7 @@ pub struct AppState {
     pub metrics_tx: broadcast::Sender<SystemSnapshot>,
     pub probe_tx: broadcast::Sender<probe::uptime::ProbeEvent>,
     pub probe_client: reqwest::Client,
+    pub probe_client_insecure: reqwest::Client,
     pub login_limiter: Arc<rate_limit::LoginRateLimiter>,
     pub session_store: session_store::SqliteSessionStore,
 }
@@ -198,6 +199,14 @@ async fn main() -> anyhow::Result<()> {
         .danger_accept_invalid_certs(false)
         .build()?;
 
+    // Second shared client for services explicitly opted into skipping TLS
+    // verification (e.g. self-signed certs like Proxmox VE's default cert).
+    // Only used for services with `skip_tls_verify = true`.
+    let probe_client_insecure = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(config.probe.timeout_secs))
+        .danger_accept_invalid_certs(true)
+        .build()?;
+
     // Build application state
     let state = AppState {
         db: db.clone(),
@@ -206,6 +215,7 @@ async fn main() -> anyhow::Result<()> {
         metrics_tx: metrics_tx.clone(),
         probe_tx: probe_tx.clone(),
         probe_client: probe_client.clone(),
+        probe_client_insecure: probe_client_insecure.clone(),
         login_limiter,
         session_store: session_store.clone(),
     };
@@ -229,8 +239,16 @@ async fn main() -> anyhow::Result<()> {
     let probe_db = db.clone();
     let probe_tx_clone = probe_tx.clone();
     let probe_loop_client = probe_client.clone();
+    let probe_loop_client_insecure = probe_client_insecure.clone();
     tokio::spawn(async move {
-        probe::start_probe_loop(probe_db, probe_config, probe_tx_clone, probe_loop_client).await;
+        probe::start_probe_loop(
+            probe_db,
+            probe_config,
+            probe_tx_clone,
+            probe_loop_client,
+            probe_loop_client_insecure,
+        )
+        .await;
     });
 
     let metrics_tx_clone = metrics_tx.clone();
