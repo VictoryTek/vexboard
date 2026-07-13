@@ -99,8 +99,9 @@ pub fn ServiceCard(
 ) -> impl IntoView {
     let service_id = service.id;
     let probe_enabled = service.probe_enabled;
+    let live_entry = Memo::new(move |_| live_status.with(|m| m.get(&service_id).cloned()));
     let history = LocalResource::new(move || {
-        let _trigger = live_status.with(|m| m.get(&service_id).cloned());
+        live_entry.get();
         async move {
             if probe_enabled {
                 fetch_history(service_id).await
