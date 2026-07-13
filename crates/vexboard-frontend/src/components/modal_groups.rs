@@ -318,9 +318,13 @@ pub fn GroupsModal(
 
                                                 // Rename button
                                                 <button
-                                                    style="background:none; border:none; cursor:pointer; \
-                                                           color:var(--color-text-muted); padding:0.25rem; \
-                                                           border-radius:0.375rem; flex-shrink:0;"
+                                                    style=move || format!(
+                                                        "background:none; border:none; cursor:pointer; \
+                                                         color:var(--color-text-muted); padding:0.25rem; \
+                                                         border-radius:0.375rem; flex-shrink:0; \
+                                                         display:{};",
+                                                        if is_editing() { "none" } else { "inline-flex" }
+                                                    )
                                                     title="Rename"
                                                     on:click=move |_| {
                                                         edit_name.set(name_for_rename.clone());
@@ -338,9 +342,13 @@ pub fn GroupsModal(
 
                                                 // Delete button
                                                 <button
-                                                    style="background:none; border:none; cursor:pointer; \
-                                                           color:var(--color-text-muted); padding:0.25rem; \
-                                                           border-radius:0.375rem; flex-shrink:0;"
+                                                    style=move || format!(
+                                                        "background:none; border:none; cursor:pointer; \
+                                                         color:var(--color-text-muted); padding:0.25rem; \
+                                                         border-radius:0.375rem; flex-shrink:0; \
+                                                         display:{};",
+                                                        if is_editing() { "none" } else { "inline-flex" }
+                                                    )
                                                     title="Delete group"
                                                     on:click=move |_| do_delete(id)
                                                 >
@@ -352,6 +360,45 @@ pub fn GroupsModal(
                                                         <path d="M10 11v6"/>
                                                         <path d="M14 11v6"/>
                                                         <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                                                    </svg>
+                                                </button>
+
+                                                // Save button
+                                                <button
+                                                    style=move || format!(
+                                                        "background:none; border:none; cursor:pointer; \
+                                                         color:var(--color-text-muted); padding:0.25rem; \
+                                                         border-radius:0.375rem; flex-shrink:0; \
+                                                         display:{};",
+                                                        if is_editing() { "inline-flex" } else { "none" }
+                                                    )
+                                                    title="Save"
+                                                    on:click=move |_| do_rename(id)
+                                                >
+                                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                                                         stroke="currentColor" stroke-width="2"
+                                                         stroke-linecap="round" stroke-linejoin="round">
+                                                        <polyline points="20 6 9 17 4 12"/>
+                                                    </svg>
+                                                </button>
+
+                                                // Cancel button
+                                                <button
+                                                    style=move || format!(
+                                                        "background:none; border:none; cursor:pointer; \
+                                                         color:var(--color-text-muted); padding:0.25rem; \
+                                                         border-radius:0.375rem; flex-shrink:0; \
+                                                         display:{};",
+                                                        if is_editing() { "inline-flex" } else { "none" }
+                                                    )
+                                                    title="Cancel"
+                                                    on:click=move |_| editing_id.set(None)
+                                                >
+                                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                                                         stroke="currentColor" stroke-width="2"
+                                                         stroke-linecap="round" stroke-linejoin="round">
+                                                        <line x1="18" y1="6" x2="6" y2="18"/>
+                                                        <line x1="6" y1="6" x2="18" y2="18"/>
                                                     </svg>
                                                 </button>
                                             </div>
