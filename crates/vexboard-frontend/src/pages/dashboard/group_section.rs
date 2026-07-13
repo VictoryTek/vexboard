@@ -156,6 +156,7 @@ pub(super) fn GroupSection(
                     };
                     Some((gid.to_string(), grp.name.clone(), text_color, bg_color, border_color, svc_members, link_members))
                 }).collect();
+                sections_data.sort_by_key(|s| s.1.to_lowercase());
 
                 let mut ungrouped_svcs: Vec<ServiceResponse> = svcs.iter()
                     .filter(|s| s.group_id.is_none_or(|gid| !known_ids.contains(&gid)))
