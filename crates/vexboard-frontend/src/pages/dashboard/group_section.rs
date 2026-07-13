@@ -262,7 +262,7 @@ pub(super) fn GroupSection(
                     }).collect_view();
 
                     let svc_row = (!svc_reset_payload.is_empty()).then(|| view! {
-                        <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,360px)); gap:1rem; justify-content:start; margin-bottom:0.75rem;">
+                        <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:1rem; justify-content:start; margin-bottom:0.75rem;">
                             {svc_cards}
                         </div>
                     });
@@ -347,7 +347,7 @@ pub(super) fn GroupSection(
                     }).collect_view();
 
                     let link_row = (!link_reset_payload.is_empty()).then(|| view! {
-                        <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:0.75rem; max-width:1200px;">
+                        <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:0.75rem;">
                             {link_cards}
                         </div>
                     });

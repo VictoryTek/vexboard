@@ -31,7 +31,7 @@ pub(super) fn ServiceGrid(
 
     view! {
         <Suspense fallback=move || view! {
-            <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,360px)); gap:1rem; justify-content:start;">
+            <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:1rem; justify-content:start;">
                 {(0..3_u8).map(|_| view! {
                     <div class="service-card" style="opacity:0.35;pointer-events:none">
                         <div class="flex items-start gap-3">
@@ -251,7 +251,7 @@ pub(super) fn ServiceGrid(
                                         </svg>
                                     </button>
                                 </div>
-                                <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,360px)); gap:1rem; justify-content:start;">
+                                <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:1rem; justify-content:start;">
                                     {cards}
                                 </div>
                             </div>
@@ -322,7 +322,7 @@ pub(super) fn ServiceGrid(
                         }
                     }).collect_view();
                     EitherOf4::D(view! {
-                        <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,360px)); gap:1rem; justify-content:start;">
+                        <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:1rem; justify-content:start;">
                             {cards}
                         </div>
                     })
