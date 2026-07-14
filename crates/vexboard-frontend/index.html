@@ -22,6 +22,28 @@
     </script>
 </head>
 <body class="bg-bg-primary text-text-primary font-geist antialiased">
+    <div id="initial-loader" style="position:fixed; inset:0; display:flex; flex-direction:column;
+                align-items:center; justify-content:center; gap:0.75rem;
+                background-color:var(--color-bg-primary); color:var(--color-text-secondary);
+                font-family:'Geist', system-ui, -apple-system, sans-serif;">
+        <div style="width:28px; height:28px; border-radius:50%;
+                    border:3px solid var(--color-border); border-top-color:var(--color-accent);
+                    animation:initial-loader-spin 0.8s linear infinite;"></div>
+        <span style="font-size:0.875rem;">Loading VexBoard…</span>
+        <span id="initial-loader-slow" style="display:none; font-size:0.75rem; max-width:20rem;
+                    text-align:center; color:var(--color-text-muted);">
+            This is taking longer than expected. Check your connection to the server.
+        </span>
+    </div>
+    <style>
+        @keyframes initial-loader-spin { to { transform: rotate(360deg); } }
+    </style>
+    <script>
+        setTimeout(function() {
+            var slow = document.getElementById('initial-loader-slow');
+            if (slow) { slow.style.display = 'block'; }
+        }, 8000);
+    </script>
     <link data-trunk rel="rust" data-wasm-opt="z" />
 </body>
 </html>

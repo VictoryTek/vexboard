@@ -21,6 +21,15 @@ impl CurrentUser {
 
 fn main() {
     console_error_panic_hook::set_once();
+
+    #[cfg(target_arch = "wasm32")]
+    if let Some(loader) = web_sys::window()
+        .and_then(|w| w.document())
+        .and_then(|d| d.get_element_by_id("initial-loader"))
+    {
+        loader.remove();
+    }
+
     mount_to_body(|| view! { <App/> });
 }
 
@@ -102,11 +111,11 @@ fn MainLayout() -> impl IntoView {
     });
 
     view! {
-        <div style="display:flex; height:100vh; overflow:hidden;">
+        <div class="app-shell">
             <components::sidebar::Sidebar />
-            <main style="flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0;">
+            <main class="app-main">
                 <components::metric_bar::MetricBar />
-                <div style="flex:1; overflow:auto; padding:1.5rem; min-height:0;">
+                <div class="app-content">
                     <Outlet />
                 </div>
             </main>

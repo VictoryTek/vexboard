@@ -37,7 +37,7 @@ pub(super) fn ServiceGrid(
         // its height and throwing the user's scroll position back to the top.
         // Transition keeps the resolved grid on screen while data reloads underneath.
         <Transition fallback=move || view! {
-            <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:1rem; justify-content:start;">
+            <div class="grid-cards-320" style="gap:1rem; justify-content:start;">
                 {(0..3_u8).map(|_| view! {
                     <div class="service-card" style="opacity:0.35;pointer-events:none">
                         <div class="flex items-start gap-3">
@@ -258,7 +258,7 @@ pub(super) fn ServiceGrid(
                                         </svg>
                                     </button>
                                 </div>
-                                <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:1rem; justify-content:start;">
+                                <div class="grid-cards-320" style="gap:1rem; justify-content:start;">
                                     {cards}
                                 </div>
                             </div>
@@ -329,7 +329,7 @@ pub(super) fn ServiceGrid(
                         }
                     }).collect_view();
                     EitherOf4::D(view! {
-                        <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:1rem; justify-content:start;">
+                        <div class="grid-cards-320" style="gap:1rem; justify-content:start;">
                             {cards}
                         </div>
                     })

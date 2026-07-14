@@ -146,7 +146,7 @@ pub(super) fn QuickLinksSection(
                     EitherOf3::C(view! {
                         <div style="margin-top:2rem;">
                             {header}
-                            <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:0.75rem;">
+                            <div class="grid-cards-200" style="gap:0.75rem;">
                                 {cards}
                             </div>
                         </div>

@@ -196,7 +196,7 @@ pub fn DiscoveryPanel(#[prop(into)] on_added: Callback<()>) -> impl IntoView {
                             "↻ Refresh"
                         </button>
                     </div>
-                    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:0.625rem;">
+                    <div class="grid-cards-280" style="gap:0.625rem;">
                         {us.into_iter().map(|unit| {
                             let color = unit.source_color().to_string();
                             let label = unit.source_label().to_string();
