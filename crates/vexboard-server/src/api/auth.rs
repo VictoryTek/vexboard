@@ -123,28 +123,35 @@ async fn login_pam(
             } else {
                 "viewer"
             }
-        } else if db::try_claim_setting(&state.db, "pam_bootstrap_admin", &payload.username)
-            .await
-            .unwrap_or(false)
-        {
-            tracing::warn!(
-                "auth.pam_admin_users is empty; granting one-time bootstrap admin to '{}'. \
-                 Set auth.pam_admin_users to make this permanent and stop further implicit grants.",
-                payload.username
-            );
-            db::audit::insert(
-                &state.db,
-                &payload.username,
-                "auth.pam_bootstrap_admin_granted",
-                None,
-                None,
-                None,
-                Some(ip),
-            )
-            .await;
-            "admin"
         } else {
-            "viewer"
+            match db::claim_bootstrap_admin(&state.db, &payload.username).await {
+                Ok(db::BootstrapAdmin::Granted) => {
+                    tracing::warn!(
+                        "auth.pam_admin_users is empty; granting one-time bootstrap admin to '{}'. \
+                         Set auth.pam_admin_users to make this permanent and stop further implicit grants.",
+                        payload.username
+                    );
+                    db::audit::insert(
+                        &state.db,
+                        &payload.username,
+                        "auth.pam_bootstrap_admin_granted",
+                        None,
+                        None,
+                        None,
+                        Some(ip),
+                    )
+                    .await;
+                    "admin"
+                }
+                // Already the bootstrap admin from an earlier login: still admin, and no
+                // repeat of the one-time warning or audit entry.
+                Ok(db::BootstrapAdmin::AlreadyHeld) => "admin",
+                Ok(db::BootstrapAdmin::HeldByOther) => "viewer",
+                Err(e) => {
+                    tracing::error!("failed to resolve pam bootstrap admin claim: {e}");
+                    "viewer"
+                }
+            }
         };
         if let Err(e) = session.insert("role", role.to_string()).await {
             tracing::error!("failed to persist role in session after login: {e}");

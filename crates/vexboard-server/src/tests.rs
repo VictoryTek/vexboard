@@ -289,6 +289,58 @@ async fn test_try_claim_setting_second_caller_loses() {
     assert_eq!(value.as_deref(), Some("alice"));
 }
 
+/// Regression: the bootstrap admin must stay admin across repeat logins.
+///
+/// The role was decided from `try_claim_setting`'s bool, which goes `false` once the
+/// row exists — including for the user who claimed it. The PAM bootstrap admin was
+/// therefore granted admin on their first login and demoted to viewer on every login
+/// after, locked out of the instance they had just set up.
+#[tokio::test]
+async fn test_bootstrap_admin_stays_admin_on_repeat_logins() {
+    use crate::db::BootstrapAdmin;
+    let app = TestApp::new().await;
+
+    let first = crate::db::claim_bootstrap_admin(&app.pool, "alice")
+        .await
+        .unwrap();
+    assert_eq!(first, BootstrapAdmin::Granted);
+
+    // Same user logging in again — previously this returned the "lost the claim"
+    // path and dropped her to viewer.
+    for _ in 0..3 {
+        let again = crate::db::claim_bootstrap_admin(&app.pool, "alice")
+            .await
+            .unwrap();
+        assert_eq!(
+            again,
+            BootstrapAdmin::AlreadyHeld,
+            "the holder of the claim must remain admin on subsequent logins"
+        );
+    }
+}
+
+/// The grant stays one-time: nobody else can inherit it.
+#[tokio::test]
+async fn test_bootstrap_admin_denied_to_other_users() {
+    use crate::db::BootstrapAdmin;
+    let app = TestApp::new().await;
+
+    crate::db::claim_bootstrap_admin(&app.pool, "alice")
+        .await
+        .unwrap();
+
+    let bob = crate::db::claim_bootstrap_admin(&app.pool, "bob")
+        .await
+        .unwrap();
+    assert_eq!(bob, BootstrapAdmin::HeldByOther);
+
+    // And the claim still belongs to alice.
+    let value = crate::db::get_setting(&app.pool, "pam_bootstrap_admin")
+        .await
+        .unwrap();
+    assert_eq!(value.as_deref(), Some("alice"));
+}
+
 // ---------------------------------------------------------------------------
 // Auth — login
 // ---------------------------------------------------------------------------

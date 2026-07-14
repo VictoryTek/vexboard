@@ -6,24 +6,28 @@ use axum::Json;
 use serde_json::json;
 use tower_sessions::Session;
 
-use crate::db;
 use crate::AppState;
 
 /// Resolve the effective role for the logged-in `username`.
 ///
-/// The `users` row is the source of truth. A session only ever caches the role
-/// at login, so a session that carries a `username` but no `role` — one created
-/// before roles existed, or whose role write failed — silently downgraded a real
-/// admin to a viewer, with no way back except re-login. Reading the role from the
-/// database on each request makes that self-healing and lets an admin's role
+/// In local-auth mode the `users` row is the source of truth. A session only ever
+/// caches the role at login, so a session carrying a `username` but no `role` — one
+/// created before roles existed, or whose role write failed — silently downgraded a
+/// real admin to a viewer, with no way back except re-login. Reading the role from
+/// the database on each request makes that self-healing and lets an admin's role
 /// change take effect immediately instead of at their next login.
 ///
-/// PAM users have no `users` row (their role is derived from config at login), so
-/// the session-cached role remains the fallback for that mode.
+/// PAM mode has no `users` table to consult (roles are derived from config, or from
+/// the one-time bootstrap claim, at login), so the session-cached role stands.
 pub async fn resolve_role(state: &AppState, session: &Session, username: &str) -> String {
-    if let Ok(Some(user)) = db::users::get_user_by_username(&state.db, username).await {
+    #[cfg(not(all(unix, feature = "pam-auth")))]
+    if let Ok(Some(user)) = crate::db::users::get_user_by_username(&state.db, username).await {
         return user.role;
     }
+
+    #[cfg(all(unix, feature = "pam-auth"))]
+    let _ = (state, username);
+
     session
         .get::<String>("role")
         .await

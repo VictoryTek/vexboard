@@ -254,3 +254,42 @@ pub async fn try_claim_setting(pool: &SqlitePool, key: &str, value: &str) -> any
         Err(e) => Err(e.into()),
     }
 }
+
+/// Who holds the one-time PAM bootstrap-admin claim, relative to the caller.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+pub enum BootstrapAdmin {
+    /// This call performed the claim — grant admin and log the one-time warning.
+    Granted,
+    /// This user already holds the claim from an earlier login — still admin, silently.
+    AlreadyHeld,
+    /// Someone else claimed it first — this user is a viewer.
+    HeldByOther,
+}
+
+/// Resolve the PAM bootstrap-admin claim for `username`.
+///
+/// [`try_claim_setting`] alone is not enough here: it returns `false` as soon as the
+/// row exists — *including to the user who claimed it*. Deciding the role from that
+/// boolean granted admin on the bootstrap user's **first** login and demoted them to
+/// viewer on **every** login after, since the claim they themselves made now made the
+/// insert fail. Comparing against the stored holder keeps the grant one-time while
+/// remaining idempotent for whoever won it.
+///
+/// Only called from `login_pam` (gated behind the `pam-auth` feature), so it appears
+/// unused to a default `cargo clippy` invocation even though the tests exercise it.
+#[allow(dead_code)]
+pub async fn claim_bootstrap_admin(
+    pool: &SqlitePool,
+    username: &str,
+) -> anyhow::Result<BootstrapAdmin> {
+    if try_claim_setting(pool, "pam_bootstrap_admin", username).await? {
+        return Ok(BootstrapAdmin::Granted);
+    }
+    let holder = get_setting(pool, "pam_bootstrap_admin").await?;
+    Ok(if holder.as_deref() == Some(username) {
+        BootstrapAdmin::AlreadyHeld
+    } else {
+        BootstrapAdmin::HeldByOther
+    })
+}
