@@ -111,6 +111,18 @@ pub fn ServiceCard(
         }
     });
 
+    // A refetching LocalResource momentarily yields `None`, which would blank the
+    // sparkline strip on every SSE probe tick. Since a probe cycle updates every
+    // service at once, all strips would collapse simultaneously, shrinking the
+    // page and yanking scroll to the top. Hold the last resolved history so the
+    // strip stays put and is only replaced once fresh data arrives.
+    let held_history = RwSignal::new(Vec::<HistoryPointFe>::new());
+    Effect::new(move |_| {
+        if let Some(points) = history.get() {
+            held_history.set(points);
+        }
+    });
+
     let base_status = service.status.clone();
     let base_latency = service.latency_ms;
     let current_status = Signal::derive(move || {
@@ -223,7 +235,7 @@ pub fn ServiceCard(
             })}
 
             // Latency sparkline + uptime-% (only when probe history is available)
-            {move || history.get().and_then(history_strip)}
+            {move || history_strip(held_history.get())}
 
             // Bottom row: status badge (left) | edit + remove (right, admin only)
             <div style="display:flex; align-items:center; justify-content:space-between; margin-top:0.4rem;"
