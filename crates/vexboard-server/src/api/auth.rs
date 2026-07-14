@@ -342,6 +342,15 @@ pub(crate) async fn me(State(state): State<AppState>, session: Session) -> impl 
                 } })),
             )
         }
+        _ if state.config.auth.mode == "none" => (
+            StatusCode::OK,
+            Json(json!({ "user": {
+                "username": "anonymous",
+                "role": "admin",
+                "auth_mode": "none",
+                "dashboard_sort_mode": "az",
+            } })),
+        ),
         _ => (
             StatusCode::UNAUTHORIZED,
             Json(json!({"error": "Not authenticated"})),

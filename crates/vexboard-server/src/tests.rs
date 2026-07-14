@@ -75,6 +75,12 @@ struct TestApp {
 
 impl TestApp {
     async fn new() -> Self {
+        Self::new_with_auth_mode("session").await
+    }
+
+    /// Same as `new()`, but with `auth.mode` set on both the state config and
+    /// the router build — mirrors how `main.rs` keeps the two in sync at startup.
+    async fn new_with_auth_mode(mode: &str) -> Self {
         let pool = SqlitePool::connect(":memory:").await.unwrap();
         crate::db::run_migrations(&pool).await.unwrap();
 
@@ -84,9 +90,12 @@ impl TestApp {
         let session_store = crate::session_store::SqliteSessionStore::new(pool.clone());
         session_store.migrate().await.unwrap();
 
+        let mut config = test_config();
+        config.auth.mode = mode.to_string();
+
         let state = AppState {
             db: pool.clone(),
-            config: Arc::new(test_config()),
+            config: Arc::new(config),
             discoveries: discovery::new_discovery_list(),
             metrics_tx,
             probe_tx,
@@ -104,7 +113,7 @@ impl TestApp {
         };
 
         let session_layer = SessionManagerLayer::new(session_store).with_secure(false);
-        let app = crate::api::router("session", state.clone())
+        let app = crate::api::router(mode, state.clone())
             .with_state(state)
             .layer(session_layer);
 
@@ -394,6 +403,15 @@ async fn test_me_authenticated_returns_username_and_role() {
     let (status, body) = app.get_json("/api/v1/auth/me", &cookie).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["user"]["username"], "alice");
+    assert_eq!(body["user"]["role"], "admin");
+}
+
+#[tokio::test]
+async fn test_me_returns_ok_with_no_session_when_auth_mode_none() {
+    let app = TestApp::new_with_auth_mode("none").await;
+    let (status, body) = app.get_json("/api/v1/auth/me", "").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["user"]["auth_mode"], "none");
     assert_eq!(body["user"]["role"], "admin");
 }
 
