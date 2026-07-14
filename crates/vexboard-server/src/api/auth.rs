@@ -316,12 +316,7 @@ pub(crate) async fn me(State(state): State<AppState>, session: Session) -> impl 
             #[cfg(not(all(unix, feature = "pam-auth")))]
             let auth_mode = "local";
 
-            let role = session
-                .get::<String>("role")
-                .await
-                .ok()
-                .flatten()
-                .unwrap_or_else(|| "viewer".to_string());
+            let role = crate::middleware::auth::resolve_role(&state, &session, &username).await;
 
             let dashboard_sort_mode =
                 db::get_setting(&state.db, &format!("dashboard_sort_mode:{username}"))

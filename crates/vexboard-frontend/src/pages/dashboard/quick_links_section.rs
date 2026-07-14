@@ -60,7 +60,7 @@ pub(super) fn QuickLinksSection(
     };
 
     view! {
-        <Suspense fallback=|| ()>
+        <Transition fallback=|| ()>
             {move || quick_links.get().map(|links| {
                 if links.is_empty() {
                     return EitherOf3::A(());
@@ -153,6 +153,6 @@ pub(super) fn QuickLinksSection(
                     })
                 }
             })}
-        </Suspense>
+        </Transition>
     }
 }

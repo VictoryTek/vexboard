@@ -288,7 +288,7 @@ async fn main() -> anyhow::Result<()> {
             "auth.mode = \"none\": all API routes are unauthenticated; only use this if the network layer restricts access"
         );
     }
-    let app = api::router(&config.auth.mode)
+    let app = api::router(&config.auth.mode, state.clone())
         .with_state(state)
         .layer(session_layer);
 

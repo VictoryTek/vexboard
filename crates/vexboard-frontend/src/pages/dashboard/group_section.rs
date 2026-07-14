@@ -118,7 +118,9 @@ pub(super) fn GroupSection(
     };
 
     view! {
-        <Suspense fallback=|| ()>
+        // See ServiceGrid: Suspense re-shows its fallback on every post-load resource
+        // change, so a probe tick blanked this whole section (fallback is `()`).
+        <Transition fallback=|| ()>
             {move || {
                 let svcs = services.get().unwrap_or_default();
                 let links = quick_links.get().unwrap_or_default();
@@ -404,6 +406,6 @@ pub(super) fn GroupSection(
 
                 view! { <div>{sections}</div> }.into_any()
             }}
-        </Suspense>
+        </Transition>
     }
 }

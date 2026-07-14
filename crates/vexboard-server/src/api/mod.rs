@@ -24,7 +24,7 @@ use utoipa_swagger_ui::SwaggerUi;
 /// `require_auth`/`require_admin` layers entirely (only safe when the
 /// network layer itself restricts access); any other value (normally
 /// `"session"`) applies them as usual.
-pub fn router(auth_mode: &str) -> Router<AppState> {
+pub fn router(auth_mode: &str, state: AppState) -> Router<AppState> {
     let auth_disabled = auth_mode == "none";
 
     // Read-only routes: viewer and admin.
@@ -51,7 +51,7 @@ pub fn router(auth_mode: &str) -> Router<AppState> {
     let admin_protected = if auth_disabled {
         admin_protected
     } else {
-        admin_protected.route_layer(middleware::from_fn(require_admin))
+        admin_protected.route_layer(middleware::from_fn_with_state(state, require_admin))
     };
 
     // Public routes: setup bootstrap, auth, health check, public config, and OpenAPI docs.

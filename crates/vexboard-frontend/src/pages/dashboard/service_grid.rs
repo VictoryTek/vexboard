@@ -30,7 +30,13 @@ pub(super) fn ServiceGrid(
     };
 
     view! {
-        <Suspense fallback=move || view! {
+        // `Transition`, not `Suspense`: every ServiceCard reads its own `history`
+        // resource inside this boundary, and Suspense re-shows its fallback whenever
+        // any resource beneath it goes pending again after the initial load. A probe
+        // tick therefore swapped the whole grid for the skeleton fallback, collapsing
+        // its height and throwing the user's scroll position back to the top.
+        // Transition keeps the resolved grid on screen while data reloads underneath.
+        <Transition fallback=move || view! {
             <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:1rem; justify-content:start;">
                 {(0..3_u8).map(|_| view! {
                     <div class="service-card" style="opacity:0.35;pointer-events:none">
@@ -330,6 +336,6 @@ pub(super) fn ServiceGrid(
                 }
             })
             }}
-        </Suspense>
+        </Transition>
     }
 }

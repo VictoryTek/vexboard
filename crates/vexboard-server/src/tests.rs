@@ -104,7 +104,7 @@ impl TestApp {
         };
 
         let session_layer = SessionManagerLayer::new(session_store).with_secure(false);
-        let app = crate::api::router("session")
+        let app = crate::api::router("session", state.clone())
             .with_state(state)
             .layer(session_layer);
 
@@ -457,6 +457,62 @@ async fn test_admin_route_as_viewer_returns_403() {
         "display_name": "Test Service",
         "probe_enabled": false
     });
+    let (status, _) = app.post_json("/api/v1/services", payload, &cookie).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+/// The `users` row — not the login-time session cache — decides the role.
+///
+/// Regression: the role was only ever written into the session at login, so a
+/// session that outlived a role change (or predated roles entirely) pinned the
+/// user to a stale role. A real admin was silently served as a viewer: the Add
+/// button vanished and every write route 403'd.
+#[tokio::test]
+async fn test_role_is_read_from_db_not_stale_session() {
+    let app = TestApp::new().await;
+    app.seed_viewer("user", "password123").await;
+
+    // Session is minted while the user is still a viewer.
+    let (_, cookie) = app.login("user", "password123").await;
+    let payload = serde_json::json!({"display_name": "Svc", "probe_enabled": false});
+    let (status, _) = app
+        .post_json("/api/v1/services", payload.clone(), &cookie)
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    // Promote in the database, reusing the *same* session cookie.
+    sqlx::query("UPDATE users SET role = 'admin' WHERE username = 'user'")
+        .execute(&app.pool)
+        .await
+        .unwrap();
+
+    let (status, _) = app.post_json("/api/v1/services", payload, &cookie).await;
+    assert_eq!(
+        status,
+        StatusCode::CREATED,
+        "promotion in the DB must take effect on the existing session"
+    );
+
+    let (status, body) = app.get_json("/api/v1/auth/me", &cookie).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["user"]["role"], "admin", "/me must report the DB role");
+}
+
+/// The mirror case: demotion in the database must revoke admin immediately
+/// rather than waiting for the stale session to expire.
+#[tokio::test]
+async fn test_db_demotion_revokes_admin_on_existing_session() {
+    let app = TestApp::new().await;
+    app.seed_admin("boss", "password123").await;
+
+    let (_, cookie) = app.login("boss", "password123").await;
+
+    sqlx::query("UPDATE users SET role = 'viewer' WHERE username = 'boss'")
+        .execute(&app.pool)
+        .await
+        .unwrap();
+
+    let payload = serde_json::json!({"display_name": "Svc", "probe_enabled": false});
     let (status, _) = app.post_json("/api/v1/services", payload, &cookie).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
 }
