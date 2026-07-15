@@ -176,7 +176,14 @@ pub fn UserMenu() -> impl IntoView {
         });
     };
 
+    // Disable Login means there's no real identity to show — no avatar, no
+    // username, no logout/account-settings menu. The server still resolves a
+    // sole account server-side (for personalization like dashboard sort mode),
+    // but that identity is never surfaced in the UI in this mode.
+    let show_menu = move || me.get().map(|m| m.auth_mode != "none").unwrap_or(false);
+
     view! {
+        <Show when=show_menu>
         <div class="user-menu" node_ref=menu_ref>
             <button class="user-menu-trigger"
                 on:click=move |_| set_dropdown_open.update(|v| *v = !*v)>
@@ -322,6 +329,7 @@ pub fn UserMenu() -> impl IntoView {
                     </div>
                 </div>
             </div>
+        </Show>
         </Show>
     }
 }

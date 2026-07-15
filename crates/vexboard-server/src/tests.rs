@@ -415,6 +415,45 @@ async fn test_me_returns_ok_with_no_session_when_auth_mode_none() {
     assert_eq!(body["user"]["role"], "admin");
 }
 
+/// Regression: with Disable Login on and no session, a single-account instance
+/// should resolve to that real account (identity + saved sort preference)
+/// instead of a synthetic "anonymous" identity — there's no ambiguity about
+/// who's at the keyboard when there's exactly one user.
+#[tokio::test]
+async fn test_me_auth_mode_none_resolves_sole_user() {
+    let app = TestApp::new_with_auth_mode("none").await;
+    app.seed_admin("alice", "password123").await;
+    app.put_json(
+        "/api/v1/auth/me/sort-mode",
+        serde_json::json!({"sort_mode": "group"}),
+        "",
+    )
+    .await;
+
+    let (status, body) = app.get_json("/api/v1/auth/me", "").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["user"]["username"], "alice");
+    assert_eq!(body["user"]["role"], "admin");
+    assert_eq!(body["user"]["auth_mode"], "none");
+    assert_eq!(body["user"]["dashboard_sort_mode"], "group");
+}
+
+/// Ambiguous case: with Disable Login on and no session, two accounts on the
+/// instance means the server can't guess which one is the real caller — falls
+/// back to the existing synthetic anonymous identity unchanged.
+#[tokio::test]
+async fn test_me_auth_mode_none_falls_back_to_anonymous_with_multiple_users() {
+    let app = TestApp::new_with_auth_mode("none").await;
+    app.seed_admin("alice", "password123").await;
+    app.seed_viewer("bob", "password123").await;
+
+    let (status, body) = app.get_json("/api/v1/auth/me", "").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["user"]["username"], "anonymous");
+    assert_eq!(body["user"]["role"], "admin");
+    assert_eq!(body["user"]["dashboard_sort_mode"], "az");
+}
+
 // ---------------------------------------------------------------------------
 // Auth — dashboard sort mode preference
 // ---------------------------------------------------------------------------

@@ -303,6 +303,32 @@ pub(crate) async fn logout(State(state): State<AppState>, session: Session) -> i
 // me
 // ---------------------------------------------------------------------------
 
+/// Resolve who the caller effectively is, without surfacing that identity as
+/// a displayed/logged-in user (the UI hides all user-menu chrome whenever
+/// `auth.mode == "none"` — this exists purely so per-user state like the
+/// dashboard sort preference still works without a session).
+///
+/// Prefers the real session. Falls back to the sole local account only when
+/// login is disabled and there is exactly one account — resolving is
+/// ambiguous with zero or multiple accounts, so no fallback applies then.
+/// PAM builds have no local `users` table to resolve against, so PAM never
+/// falls back here.
+async fn resolve_effective_user(state: &AppState, session: &Session) -> Option<(String, String)> {
+    if let Ok(Some(username)) = session.get::<String>("username").await {
+        let role = crate::middleware::auth::resolve_role(state, session, &username).await;
+        return Some((username, role));
+    }
+
+    if state.config.auth.mode == "none" {
+        #[cfg(not(all(unix, feature = "pam-auth")))]
+        if let Ok(Some(user)) = db::users::get_sole_user(&state.db).await {
+            return Some((user.username, user.role));
+        }
+    }
+
+    None
+}
+
 #[utoipa::path(
     get,
     path = "/api/v1/auth/me",
@@ -315,15 +341,17 @@ pub(crate) async fn logout(State(state): State<AppState>, session: Session) -> i
 )]
 #[tracing::instrument(skip_all)]
 pub(crate) async fn me(State(state): State<AppState>, session: Session) -> impl IntoResponse {
-    match session.get::<String>("username").await {
-        Ok(Some(username)) => {
+    match resolve_effective_user(&state, &session).await {
+        Some((username, role)) => {
             #[cfg(all(unix, feature = "pam-auth"))]
             let auth_mode = "pam";
 
             #[cfg(not(all(unix, feature = "pam-auth")))]
-            let auth_mode = "local";
-
-            let role = crate::middleware::auth::resolve_role(&state, &session, &username).await;
+            let auth_mode = if state.config.auth.mode == "none" {
+                "none"
+            } else {
+                "local"
+            };
 
             let dashboard_sort_mode =
                 db::get_setting(&state.db, &format!("dashboard_sort_mode:{username}"))
@@ -342,7 +370,7 @@ pub(crate) async fn me(State(state): State<AppState>, session: Session) -> impl 
                 } })),
             )
         }
-        _ if state.config.auth.mode == "none" => (
+        None if state.config.auth.mode == "none" => (
             StatusCode::OK,
             Json(json!({ "user": {
                 "username": "anonymous",
@@ -557,9 +585,9 @@ pub(crate) async fn update_sort_mode(
     session: Session,
     Json(payload): Json<UpdateSortModeRequest>,
 ) -> impl IntoResponse {
-    let username = match session.get::<String>("username").await {
-        Ok(Some(u)) => u,
-        _ => {
+    let username = match resolve_effective_user(&state, &session).await {
+        Some((u, _)) => u,
+        None => {
             return (
                 StatusCode::UNAUTHORIZED,
                 Json(json!({"error": "Not authenticated"})),
