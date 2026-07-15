@@ -313,6 +313,12 @@ pub(crate) async fn logout(State(state): State<AppState>, session: Session) -> i
 /// ambiguous with zero or multiple accounts, so no fallback applies then.
 /// PAM builds have no local `users` table to resolve against, so PAM never
 /// falls back here.
+/// Storage key for the dashboard sort preference when login is disabled and
+/// no single local account can be resolved (zero or 2+ accounts). With no
+/// session there is no way to distinguish devices/callers, so the preference
+/// is shared instance-wide rather than lost.
+const ANONYMOUS_SORT_MODE_KEY: &str = "dashboard_sort_mode:__anonymous__";
+
 async fn resolve_effective_user(state: &AppState, session: &Session) -> Option<(String, String)> {
     if let Ok(Some(username)) = session.get::<String>("username").await {
         let role = crate::middleware::auth::resolve_role(state, session, &username).await;
@@ -370,15 +376,23 @@ pub(crate) async fn me(State(state): State<AppState>, session: Session) -> impl 
                 } })),
             )
         }
-        None if state.config.auth.mode == "none" => (
-            StatusCode::OK,
-            Json(json!({ "user": {
-                "username": "anonymous",
-                "role": "admin",
-                "auth_mode": "none",
-                "dashboard_sort_mode": "az",
-            } })),
-        ),
+        None if state.config.auth.mode == "none" => {
+            let dashboard_sort_mode = db::get_setting(&state.db, ANONYMOUS_SORT_MODE_KEY)
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "az".to_string());
+
+            (
+                StatusCode::OK,
+                Json(json!({ "user": {
+                    "username": "anonymous",
+                    "role": "admin",
+                    "auth_mode": "none",
+                    "dashboard_sort_mode": dashboard_sort_mode,
+                } })),
+            )
+        }
         _ => (
             StatusCode::UNAUTHORIZED,
             Json(json!({"error": "Not authenticated"})),
@@ -585,8 +599,9 @@ pub(crate) async fn update_sort_mode(
     session: Session,
     Json(payload): Json<UpdateSortModeRequest>,
 ) -> impl IntoResponse {
-    let username = match resolve_effective_user(&state, &session).await {
-        Some((u, _)) => u,
+    let key = match resolve_effective_user(&state, &session).await {
+        Some((u, _)) => format!("dashboard_sort_mode:{u}"),
+        None if state.config.auth.mode == "none" => ANONYMOUS_SORT_MODE_KEY.to_string(),
         None => {
             return (
                 StatusCode::UNAUTHORIZED,
@@ -602,7 +617,6 @@ pub(crate) async fn update_sort_mode(
         );
     }
 
-    let key = format!("dashboard_sort_mode:{username}");
     if db::set_setting(&state.db, &key, &payload.sort_mode)
         .await
         .is_err()

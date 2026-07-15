@@ -454,6 +454,32 @@ async fn test_me_auth_mode_none_falls_back_to_anonymous_with_multiple_users() {
     assert_eq!(body["user"]["dashboard_sort_mode"], "az");
 }
 
+/// Regression: with Disable Login on and an ambiguous account count (here,
+/// two accounts), the sort preference must still persist across requests
+/// instead of silently discarding the write (previously a hardcoded "az" on
+/// every GET and a 401 on every PUT, since there was no resolvable identity
+/// to key the setting under).
+#[tokio::test]
+async fn test_sort_mode_persists_with_ambiguous_account_count() {
+    let app = TestApp::new_with_auth_mode("none").await;
+    app.seed_admin("alice", "password123").await;
+    app.seed_viewer("bob", "password123").await;
+
+    let (put_status, _) = app
+        .put_json(
+            "/api/v1/auth/me/sort-mode",
+            serde_json::json!({"sort_mode": "group"}),
+            "",
+        )
+        .await;
+    assert_eq!(put_status, StatusCode::OK);
+
+    let (status, body) = app.get_json("/api/v1/auth/me", "").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["user"]["username"], "anonymous");
+    assert_eq!(body["user"]["dashboard_sort_mode"], "group");
+}
+
 // ---------------------------------------------------------------------------
 // Auth — dashboard sort mode preference
 // ---------------------------------------------------------------------------
