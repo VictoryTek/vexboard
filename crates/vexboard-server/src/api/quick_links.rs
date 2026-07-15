@@ -145,7 +145,7 @@ pub(crate) async fn update_quick_link(
         .description
         .map(|v| if v.is_empty() { None } else { Some(v) })
         .unwrap_or(existing.description);
-    let group_id = payload.group_id.or(existing.group_id);
+    let group_id = payload.group_id.unwrap_or(existing.group_id);
     let sort_order = payload.sort_order.unwrap_or(existing.sort_order);
 
     match sqlx::query(

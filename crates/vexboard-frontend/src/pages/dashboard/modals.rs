@@ -61,6 +61,7 @@ pub(super) fn DashboardModals(
             visible=show_groups_modal
             on_close=Callback::new(move |_| show_groups_modal.set(false))
             on_saved=Callback::new(move |_| { groups.refetch(); services.refetch(); quick_links.refetch(); })
+            groups=groups
         />
 
         // Add service modal — fresh instance per open so form state doesn't leak between adds

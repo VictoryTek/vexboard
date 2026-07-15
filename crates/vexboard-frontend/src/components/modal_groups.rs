@@ -1,6 +1,8 @@
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
+use crate::pages::dashboard::GroupResponse;
+
 const PALETTE: &[(&str, &str)] = &[
     ("Blue", "#3b82f6"),
     ("Purple", "#8b5cf6"),
@@ -14,26 +16,6 @@ const PALETTE: &[(&str, &str)] = &[
 ];
 
 const DEFAULT_COLOR: &str = "#3b82f6";
-
-#[derive(Debug, Clone, serde::Deserialize)]
-struct GroupEntry {
-    id: i64,
-    name: String,
-    #[allow(dead_code)]
-    icon: Option<String>,
-    color: Option<String>,
-    sort_order: i64,
-}
-
-async fn fetch_groups_internal() -> Vec<GroupEntry> {
-    let Ok(resp) = gloo_net::http::Request::get("/api/v1/groups").send().await else {
-        return Vec::new();
-    };
-    if !resp.ok() {
-        return Vec::new();
-    }
-    resp.json::<Vec<GroupEntry>>().await.unwrap_or_default()
-}
 
 #[component]
 fn ColorSwatches(
@@ -73,8 +55,16 @@ pub fn GroupsModal(
     #[prop(into)] visible: Signal<bool>,
     #[prop(into)] on_close: Callback<()>,
     #[prop(into)] on_saved: Callback<()>,
+    groups: LocalResource<Vec<GroupResponse>>,
 ) -> impl IntoView {
-    let groups = LocalResource::new(fetch_groups_internal);
+    // Re-fetch whenever the modal opens so it always reflects the same
+    // server state as the rest of the dashboard, regardless of how stale
+    // the shared resource's last-fetched snapshot might be.
+    Effect::new(move |_| {
+        if visible.get() {
+            groups.refetch();
+        }
+    });
 
     // id of the group currently being renamed
     let editing_id: RwSignal<Option<i64>> = RwSignal::new(None);

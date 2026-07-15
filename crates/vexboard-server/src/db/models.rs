@@ -200,7 +200,9 @@ pub struct UpdateQuickLink {
     pub url: Option<String>,
     pub icon: Option<String>,
     pub description: Option<String>,
-    pub group_id: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_some")]
+    #[schema(value_type = Option<i64>)]
+    pub group_id: Option<Option<i64>>,
     pub sort_order: Option<i64>,
 }
 

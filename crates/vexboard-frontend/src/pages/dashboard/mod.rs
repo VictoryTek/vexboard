@@ -92,10 +92,11 @@ pub(super) struct ServiceResponse {
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-pub(super) struct GroupResponse {
+pub(crate) struct GroupResponse {
     pub id: i64,
     pub name: String,
     pub color: Option<String>,
+    pub sort_order: i64,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
