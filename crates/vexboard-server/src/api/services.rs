@@ -272,6 +272,14 @@ pub(crate) async fn create_service(
         Ok(r) => {
             let new_id = r.last_insert_rowid();
 
+            if let (Some(source), Some(unit_name)) =
+                (&payload.discovery_source, &payload.systemd_unit)
+            {
+                let mut discoveries = state.discoveries.write().await;
+                discoveries.retain(|u| !(&u.source == source && &u.unit_name == unit_name));
+                drop(discoveries);
+            }
+
             // Trigger an immediate background probe so status is ready on the
             // next frontend refetch instead of waiting for the next probe cycle.
             let probe_db = state.db.clone();
