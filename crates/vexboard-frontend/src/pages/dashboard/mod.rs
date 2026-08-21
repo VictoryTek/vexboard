@@ -165,7 +165,7 @@ pub fn DashboardPage() -> impl IntoView {
     let edit_target: RwSignal<Option<(i64, EditFormData)>> = RwSignal::new(None);
     let edit_link_target: RwSignal<Option<(i64, QuickLinkFormData)>> = RwSignal::new(None);
     // (service id, display name) of the service whose uptime history modal is open.
-    let history_target: RwSignal<Option<(i64, String)>> = RwSignal::new(None);
+    let history_target: RwSignal<Option<(i64, String, bool)>> = RwSignal::new(None);
 
     // Live status/latency overrides patched in from the probe SSE stream, keyed by service
     // id. Lifted here (rather than owned by `ServiceGrid`) so both `ServiceGrid` and

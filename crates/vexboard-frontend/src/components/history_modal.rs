@@ -1,6 +1,41 @@
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
+use crate::CurrentUser;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ControlAction {
+    Start,
+    Stop,
+    Restart,
+}
+
+impl ControlAction {
+    fn as_str(self) -> &'static str {
+        match self {
+            ControlAction::Start => "start",
+            ControlAction::Stop => "stop",
+            ControlAction::Restart => "restart",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            ControlAction::Start => "Start",
+            ControlAction::Stop => "Stop",
+            ControlAction::Restart => "Restart",
+        }
+    }
+
+    fn confirm_label(self) -> &'static str {
+        match self {
+            ControlAction::Start => "Start",
+            ControlAction::Stop => "Confirm Stop?",
+            ControlAction::Restart => "Confirm Restart?",
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Deserialize)]
 struct HeartbeatPoint {
     status: String,
@@ -37,6 +72,25 @@ async fn fetch_uptime_summary(id: i64) -> Option<UptimeSummaryFe> {
     resp.json::<UptimeSummaryFe>().await.ok()
 }
 
+/// Fires a start/stop/restart request and returns `Ok(())` or a
+/// human-readable error extracted from the response body when possible.
+async fn send_control(id: i64, action: ControlAction) -> Result<(), String> {
+    let resp = gloo_net::http::Request::post(&format!("/api/v1/services/{id}/{}", action.as_str()))
+        .send()
+        .await
+        .map_err(|_| "Could not reach the server.".to_string())?;
+    if resp.ok() {
+        return Ok(());
+    }
+    let msg = resp
+        .json::<serde_json::Value>()
+        .await
+        .ok()
+        .and_then(|v| v["error"].as_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| "Request failed.".to_string());
+    Err(msg)
+}
+
 fn stat_text(v: Option<f64>) -> String {
     match v {
         Some(v) => format!("{v:.1}%"),
@@ -61,15 +115,30 @@ fn format_duration(secs: i64) -> String {
 }
 
 /// Shows uptime percentages, a heartbeat bar, and incident history for one
-/// service. Opened by setting `target` to `Some((service_id, display_name))`;
-/// closed by setting it back to `None`.
+/// service, plus (admin only, when the service is backed by a systemd unit
+/// or container) start/stop/restart controls. Opened by setting `target` to
+/// `Some((service_id, display_name, controllable))`; closed by setting it
+/// back to `None`.
 #[component]
-pub fn HistoryModal(target: RwSignal<Option<(i64, String)>>) -> impl IntoView {
+pub fn HistoryModal(target: RwSignal<Option<(i64, String, bool)>>) -> impl IntoView {
     let summary: RwSignal<Option<UptimeSummaryFe>> = RwSignal::new(None);
+    let pending_confirm: RwSignal<Option<ControlAction>> = RwSignal::new(None);
+    let control_busy = RwSignal::new(false);
+    let control_msg: RwSignal<Option<(bool, String)>> = RwSignal::new(None);
+
+    let current_user = use_context::<RwSignal<Option<CurrentUser>>>();
+    let is_admin = move || {
+        current_user
+            .and_then(|u| u.get())
+            .map(|u| u.is_admin())
+            .unwrap_or(false)
+    };
 
     Effect::new(move |_| {
-        if let Some((id, _)) = target.get() {
+        if let Some((id, _, _)) = target.get() {
             summary.set(None);
+            pending_confirm.set(None);
+            control_msg.set(None);
             spawn_local(async move {
                 let fetched = fetch_uptime_summary(id).await;
                 summary.set(fetched);
@@ -80,6 +149,28 @@ pub fn HistoryModal(target: RwSignal<Option<(i64, String)>>) -> impl IntoView {
     let close = move || {
         target.set(None);
         summary.set(None);
+        pending_confirm.set(None);
+        control_msg.set(None);
+    };
+
+    let fire_control = move |action: ControlAction| {
+        let Some((id, _, _)) = target.get() else {
+            return;
+        };
+        pending_confirm.set(None);
+        control_msg.set(None);
+        control_busy.set(true);
+        spawn_local(async move {
+            let result = send_control(id, action).await;
+            control_busy.set(false);
+            control_msg.set(Some(match result {
+                Ok(()) => (false, format!("{} requested.", action.label())),
+                Err(e) => (true, e),
+            }));
+            if let Some(fetched) = fetch_uptime_summary(id).await {
+                summary.set(Some(fetched));
+            }
+        });
     };
 
     view! {
@@ -97,7 +188,7 @@ pub fn HistoryModal(target: RwSignal<Option<(i64, String)>>) -> impl IntoView {
                              max-height:80vh; overflow-y:auto;">
                     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.25rem;">
                         <h2 style="font-size:1rem; font-weight:600; margin:0;">
-                            {move || target.get().map(|(_, name)| name).unwrap_or_default()}
+                            {move || target.get().map(|(_, name, _)| name).unwrap_or_default()}
                         </h2>
                         <button
                             style="background:none; border:none; cursor:pointer; color:var(--color-text-muted); \
@@ -112,6 +203,65 @@ pub fn HistoryModal(target: RwSignal<Option<(i64, String)>>) -> impl IntoView {
                             </svg>
                         </button>
                     </div>
+
+                    <Show when=move || {
+                        is_admin() && target.get().map(|(_, _, controllable)| controllable).unwrap_or(false)
+                    }>
+                        <div class="history-controls">
+                            <button
+                                class="btn-secondary"
+                                disabled=move || control_busy.get()
+                                on:click=move |_| fire_control(ControlAction::Start)
+                            >
+                                {ControlAction::Start.label()}
+                            </button>
+                            <button
+                                class=move || if pending_confirm.get() == Some(ControlAction::Stop) { "btn-danger" } else { "btn-secondary" }
+                                disabled=move || control_busy.get()
+                                on:click=move |_| {
+                                    if pending_confirm.get() == Some(ControlAction::Stop) {
+                                        fire_control(ControlAction::Stop);
+                                    } else {
+                                        pending_confirm.set(Some(ControlAction::Stop));
+                                    }
+                                }
+                            >
+                                {move || if pending_confirm.get() == Some(ControlAction::Stop) {
+                                    ControlAction::Stop.confirm_label()
+                                } else {
+                                    ControlAction::Stop.label()
+                                }}
+                            </button>
+                            <button
+                                class=move || if pending_confirm.get() == Some(ControlAction::Restart) { "btn-danger" } else { "btn-secondary" }
+                                disabled=move || control_busy.get()
+                                on:click=move |_| {
+                                    if pending_confirm.get() == Some(ControlAction::Restart) {
+                                        fire_control(ControlAction::Restart);
+                                    } else {
+                                        pending_confirm.set(Some(ControlAction::Restart));
+                                    }
+                                }
+                            >
+                                {move || if pending_confirm.get() == Some(ControlAction::Restart) {
+                                    ControlAction::Restart.confirm_label()
+                                } else {
+                                    ControlAction::Restart.label()
+                                }}
+                            </button>
+                        </div>
+                        {move || control_msg.get().map(|(is_err, msg)| view! {
+                            <p
+                                class="history-control-msg"
+                                style=move || format!(
+                                    "color:{}",
+                                    if is_err { "var(--color-danger)" } else { "var(--color-success)" }
+                                )
+                            >
+                                {msg}
+                            </p>
+                        })}
+                    </Show>
 
                     {move || match summary.get() {
                         None => view! {

@@ -30,7 +30,7 @@ pub(super) fn GroupSection(
     ql_section_drag_over: RwSignal<Option<(String, usize)>>,
     edit_target: RwSignal<Option<(i64, EditFormData)>>,
     edit_link_target: RwSignal<Option<(i64, QuickLinkFormData)>>,
-    history_target: RwSignal<Option<(i64, String)>>,
+    history_target: RwSignal<Option<(i64, String, bool)>>,
 ) -> impl IntoView {
     let current_user = use_context::<RwSignal<Option<CurrentUser>>>();
     let is_admin = move || {
@@ -53,6 +53,7 @@ pub(super) fn GroupSection(
             skip_tls_verify: svc.skip_tls_verify,
         };
         let name_for_history = svc.display_name.clone();
+        let controllable = svc.systemd_unit.is_some();
         let data = ServiceData {
             id: svc.id,
             systemd_unit: svc.systemd_unit,
@@ -82,8 +83,9 @@ pub(super) fn GroupSection(
             (None, None)
         };
         // Viewing uptime history is a read action available to every user, unlike edit/delete.
+        // Start/stop/restart controls inside the modal are further gated on admin + controllable there.
         let on_history = Some(Callback::new(move |_: i64| {
-            history_target.set(Some((id, name_for_history.clone())));
+            history_target.set(Some((id, name_for_history.clone(), controllable)));
         }));
         view! { <ServiceCard service=data live_status=live_status on_delete=on_delete on_edit=on_edit on_history=on_history /> }
     };

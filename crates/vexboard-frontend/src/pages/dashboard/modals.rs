@@ -18,7 +18,7 @@ pub(super) fn DashboardModals(
     show_groups_modal: RwSignal<bool>,
     edit_target: RwSignal<Option<(i64, EditFormData)>>,
     edit_link_target: RwSignal<Option<(i64, QuickLinkFormData)>>,
-    history_target: RwSignal<Option<(i64, String)>>,
+    history_target: RwSignal<Option<(i64, String, bool)>>,
 ) -> impl IntoView {
     let on_save = Callback::new(move |data: EditFormData| {
         spawn_local(async move {

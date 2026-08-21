@@ -400,6 +400,25 @@
     border-color: var(--color-border-bright);
   }
 
+  .btn-danger {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    background-color: var(--color-danger);
+    color: white;
+    border: none;
+    cursor: pointer;
+    transition: background-color 150ms, box-shadow 150ms;
+  }
+
+  .btn-danger:hover {
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25);
+  }
+
   /* ── Forms ── */
   .form-input {
     width: 100%;
@@ -784,6 +803,18 @@
   }
 
   /* ── Uptime history modal ── */
+  .history-controls {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+  }
+
+  .history-control-msg {
+    font-size: 0.75rem;
+    margin: 0 0 1.25rem;
+  }
+
   .history-stats {
     display: flex;
     gap: 0.75rem;

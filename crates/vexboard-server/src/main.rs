@@ -1,5 +1,6 @@
 mod api;
 mod config;
+mod control;
 mod db;
 mod discovery;
 mod metrics;

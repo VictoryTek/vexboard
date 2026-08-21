@@ -731,3 +731,49 @@ async fn test_create_service_as_viewer_returns_403() {
     let (status, _) = app.post_json("/api/v1/services", payload, &cookie).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
 }
+
+#[tokio::test]
+async fn test_control_unknown_service_returns_404() {
+    let app = TestApp::new().await;
+    app.seed_admin("admin", "password123").await;
+    let (_, cookie) = app.login("admin", "password123").await;
+
+    let (status, _) = app
+        .post_json(
+            "/api/v1/services/99999/start",
+            serde_json::json!({}),
+            &cookie,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+/// A manual, URL-only service has no systemd unit or container backing it —
+/// control routes must reject it before ever reaching D-Bus/Docker.
+#[tokio::test]
+async fn test_control_manual_service_returns_400() {
+    let app = TestApp::new().await;
+    app.seed_admin("admin", "password123").await;
+    let (_, cookie) = app.login("admin", "password123").await;
+
+    let payload = serde_json::json!({
+        "display_name": "Manual Service",
+        "url": "http://localhost:8080",
+        "probe_enabled": false
+    });
+    let (_, created) = app.post_json("/api/v1/services", payload, &cookie).await;
+    let id = created["id"].as_i64().unwrap();
+
+    let (status, body) = app
+        .post_json(
+            &format!("/api/v1/services/{id}/stop"),
+            serde_json::json!({}),
+            &cookie,
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body["error"]
+        .as_str()
+        .unwrap()
+        .contains("isn't backed by a systemd unit or container"));
+}

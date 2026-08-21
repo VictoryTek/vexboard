@@ -17,6 +17,7 @@ use serde_json::json;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 
+use crate::control::{self, UnitAction};
 use crate::db;
 use crate::db::models::{
     CreateService, ProbeHistoryPoint, ReorderItem, Service, ServiceWithStatus, UpdateService,
@@ -62,6 +63,9 @@ pub fn admin_router() -> Router<AppState> {
         .route("/", post(create_service))
         .route("/{id}", put(update_service).delete(delete_service))
         .route("/{id}/claim", post(claim_service))
+        .route("/{id}/start", post(start_service))
+        .route("/{id}/stop", post(stop_service))
+        .route("/{id}/restart", post(restart_service))
 }
 
 #[utoipa::path(
@@ -723,4 +727,241 @@ pub(crate) async fn claim_service(
     create_service(State(state), session, Json(payload))
         .await
         .into_response()
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/services/{id}/start",
+    tag = "services",
+    security(("cookieAuth" = [])),
+    params(("id" = i64, Path, description = "Service ID")),
+    responses(
+        (status = 200, description = "Start requested"),
+        (status = 400, description = "Service has no systemd unit or container to control"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Admin role required"),
+        (status = 404, description = "Service not found"),
+        (status = 502, description = "The underlying systemd/Docker call failed"),
+    )
+)]
+#[tracing::instrument(skip(state, session))]
+pub(crate) async fn start_service(
+    State(state): State<AppState>,
+    session: Session,
+    Path(id): Path<i64>,
+) -> axum::response::Response {
+    control_service(state, session, id, UnitAction::Start).await
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/services/{id}/stop",
+    tag = "services",
+    security(("cookieAuth" = [])),
+    params(("id" = i64, Path, description = "Service ID")),
+    responses(
+        (status = 200, description = "Stop requested"),
+        (status = 400, description = "Service has no systemd unit or container to control"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Admin role required"),
+        (status = 404, description = "Service not found"),
+        (status = 502, description = "The underlying systemd/Docker call failed"),
+    )
+)]
+#[tracing::instrument(skip(state, session))]
+pub(crate) async fn stop_service(
+    State(state): State<AppState>,
+    session: Session,
+    Path(id): Path<i64>,
+) -> axum::response::Response {
+    control_service(state, session, id, UnitAction::Stop).await
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/services/{id}/restart",
+    tag = "services",
+    security(("cookieAuth" = [])),
+    params(("id" = i64, Path, description = "Service ID")),
+    responses(
+        (status = 200, description = "Restart requested"),
+        (status = 400, description = "Service has no systemd unit or container to control"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Admin role required"),
+        (status = 404, description = "Service not found"),
+        (status = 502, description = "The underlying systemd/Docker call failed"),
+    )
+)]
+#[tracing::instrument(skip(state, session))]
+pub(crate) async fn restart_service(
+    State(state): State<AppState>,
+    session: Session,
+    Path(id): Path<i64>,
+) -> axum::response::Response {
+    control_service(state, session, id, UnitAction::Restart).await
+}
+
+/// Shared body for start/stop/restart: look up the service server-side (the
+/// client only ever sends an id, never a unit/container name directly),
+/// dispatch to the systemd or Docker backend, audit the attempt either way,
+/// and fire an immediate re-probe on success so the dashboard reflects the
+/// new state within one probe round-trip.
+async fn control_service(
+    state: AppState,
+    session: Session,
+    id: i64,
+    action: UnitAction,
+) -> axum::response::Response {
+    let svc = match sqlx::query_as::<_, Service>(
+        "SELECT id, systemd_unit, discovery_source, display_name, description, url, icon, group_id, \
+         sort_order, probe_enabled, probe_interval, tags, visible, skip_tls_verify, created_at, updated_at \
+         FROM services WHERE id = ?",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await
+    {
+        Ok(Some(s)) => s,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Service not found"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            tracing::error!("Failed to fetch service {id} for control action: {e}");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Database error"})),
+            )
+                .into_response();
+        }
+    };
+
+    let is_container = matches!(
+        svc.discovery_source.as_deref(),
+        Some("docker") | Some("podman")
+    );
+
+    let result: anyhow::Result<()> = if is_container {
+        match &svc.systemd_unit {
+            Some(name) => {
+                let socket = state
+                    .config
+                    .docker
+                    .sockets
+                    .iter()
+                    .map(|s| s.as_str())
+                    .find(|s| {
+                        let source = if s.contains("podman") {
+                            "podman"
+                        } else {
+                            "docker"
+                        };
+                        Some(source) == svc.discovery_source.as_deref()
+                    });
+                match socket {
+                    Some(socket) => control::docker::control_container(socket, name, action).await,
+                    None => Err(anyhow::anyhow!(
+                        "No configured Docker/Podman socket matches this service's discovery source"
+                    )),
+                }
+            }
+            None => Err(anyhow::anyhow!("Service has no container name recorded")),
+        }
+    } else if let Some(unit) = &svc.systemd_unit {
+        control::systemd::control_unit(unit, action).await
+    } else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "error": "This service isn't backed by a systemd unit or container and can't be controlled."
+            })),
+        )
+            .into_response();
+    };
+
+    let actor = session
+        .get::<String>("username")
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "unknown".to_string());
+
+    match result {
+        Ok(()) => {
+            db::audit::insert(
+                &state.db,
+                &actor,
+                action.audit_action(),
+                Some("service"),
+                Some(id),
+                Some(&json!({"display_name": svc.display_name}).to_string()),
+                None,
+            )
+            .await;
+
+            // Immediate re-probe so the dashboard reflects the new state soon,
+            // mirroring the pattern already used after `create_service`.
+            let probe_db = state.db.clone();
+            let probe_tx = state.probe_tx.clone();
+            let probe_client = state.probe_client.clone();
+            let probe_client_insecure = state.probe_client_insecure.clone();
+            let retention_days = state.config.probe.history_retention_days;
+            let svc_for_probe = svc.clone();
+            tokio::spawn(async move {
+                let use_systemd = svc_for_probe.systemd_unit.is_some()
+                    && !matches!(
+                        svc_for_probe.discovery_source.as_deref(),
+                        Some("docker") | Some("podman")
+                    );
+                if use_systemd {
+                    probe::uptime::probe_systemd_unit(
+                        &probe_db,
+                        &svc_for_probe,
+                        retention_days,
+                        &probe_tx,
+                    )
+                    .await;
+                } else if svc_for_probe.url.is_some() {
+                    let client = if svc_for_probe.skip_tls_verify {
+                        &probe_client_insecure
+                    } else {
+                        &probe_client
+                    };
+                    probe::uptime::probe_service(
+                        &probe_db,
+                        &svc_for_probe,
+                        client,
+                        retention_days,
+                        &probe_tx,
+                    )
+                    .await;
+                }
+            });
+
+            (StatusCode::OK, Json(json!({"status": "ok"}))).into_response()
+        }
+        Err(e) => {
+            tracing::warn!("service control action {action:?} failed for service {id}: {e}");
+            db::audit::insert(
+                &state.db,
+                &actor,
+                action.audit_action(),
+                Some("service"),
+                Some(id),
+                Some(
+                    &json!({"display_name": svc.display_name, "error": e.to_string()}).to_string(),
+                ),
+                None,
+            )
+            .await;
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
 }
