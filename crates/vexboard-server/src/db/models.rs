@@ -161,6 +161,32 @@ pub struct ProbeHistoryPoint {
     pub checked_at: Option<NaiveDateTime>,
 }
 
+/// A single maximal run of consecutive non-"up" probe results.
+#[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
+pub struct Incident {
+    /// The last non-"up" status seen during the run (`"down"` or `"unknown"`).
+    pub status: String,
+    pub started_at: NaiveDateTime,
+    /// `None` while the incident is still ongoing (no recovery check yet).
+    pub ended_at: Option<NaiveDateTime>,
+    /// Seconds from `started_at` to `ended_at`, or to now while ongoing.
+    pub duration_secs: i64,
+    pub check_count: i64,
+}
+
+/// Uptime percentages, recent heartbeats, and derived incidents for one service.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct UptimeSummary {
+    /// `None` when there are no probe results within the window yet.
+    pub uptime_24h: Option<f64>,
+    pub uptime_7d: Option<f64>,
+    pub uptime_30d: Option<f64>,
+    /// The most recent probe results, oldest-first.
+    pub heartbeats: Vec<ProbeHistoryPoint>,
+    /// Most-recent-first.
+    pub incidents: Vec<Incident>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct QuickLink {
     pub id: i64,

@@ -117,7 +117,8 @@ pub struct DockerConfig {
 pub struct ProbeConfig {
     pub default_interval_secs: u64,
     pub timeout_secs: u64,
-    pub max_history: u64,
+    /// How many days of probe_results to keep per service before pruning.
+    pub history_retention_days: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]

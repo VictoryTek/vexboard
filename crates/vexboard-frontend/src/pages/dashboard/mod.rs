@@ -164,6 +164,8 @@ pub fn DashboardPage() -> impl IntoView {
 
     let edit_target: RwSignal<Option<(i64, EditFormData)>> = RwSignal::new(None);
     let edit_link_target: RwSignal<Option<(i64, QuickLinkFormData)>> = RwSignal::new(None);
+    // (service id, display name) of the service whose uptime history modal is open.
+    let history_target: RwSignal<Option<(i64, String)>> = RwSignal::new(None);
 
     // Live status/latency overrides patched in from the probe SSE stream, keyed by service
     // id. Lifted here (rather than owned by `ServiceGrid`) so both `ServiceGrid` and
@@ -206,6 +208,7 @@ pub fn DashboardPage() -> impl IntoView {
             show_groups_modal=show_groups_modal
             edit_target=edit_target
             edit_link_target=edit_link_target
+            history_target=history_target
         />
 
         <div>
@@ -386,6 +389,7 @@ pub fn DashboardPage() -> impl IntoView {
                 section_drag_src=section_drag_src
                 section_drag_over=section_drag_over
                 edit_target=edit_target
+                history_target=history_target
             />
 
             // ── Quick links (A-Z mode) ──────────────────────────────────────────────
@@ -410,6 +414,7 @@ pub fn DashboardPage() -> impl IntoView {
                     ql_section_drag_over=ql_section_drag_over
                     edit_target=edit_target
                     edit_link_target=edit_link_target
+                    history_target=history_target
                 />
             </Show>
         </div>

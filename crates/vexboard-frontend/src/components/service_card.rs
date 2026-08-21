@@ -96,6 +96,7 @@ pub fn ServiceCard(
     live_status: RwSignal<HashMap<i64, (String, Option<i64>)>>,
     on_delete: Option<Callback<i64>>,
     on_edit: Option<Callback<i64>>,
+    on_history: Option<Callback<i64>>,
 ) -> impl IntoView {
     let service_id = service.id;
     let probe_enabled = service.probe_enabled;
@@ -234,8 +235,25 @@ pub fn ServiceCard(
                 </p>
             })}
 
-            // Latency sparkline + uptime-% (only when probe history is available)
-            {move || history_strip(held_history.get())}
+            // Latency sparkline + uptime-% (only when probe history is available).
+            // Clickable when `on_history` is provided, to open the full history modal.
+            {move || history_strip(held_history.get()).map(|strip| {
+                view! {
+                    <div
+                        style=move || if on_history.is_some() { "cursor:pointer;" } else { "" }
+                        title=move || if on_history.is_some() { "View uptime history" } else { "" }
+                        on:click=move |ev| {
+                            if let Some(cb) = on_history {
+                                ev.prevent_default();
+                                ev.stop_propagation();
+                                cb.run(service_id);
+                            }
+                        }
+                    >
+                        {strip}
+                    </div>
+                }
+            })}
 
             // Bottom row: status badge (left) | edit + remove (right, admin only)
             <div style="display:flex; align-items:center; justify-content:space-between; margin-top:0.4rem;"

@@ -32,11 +32,17 @@ struct LatestProbe {
     latency_ms: Option<i64>,
 }
 
+/// Safety cap on rows fetched for one service's uptime summary, independent
+/// of `probe.history_retention_days` — bounds worst-case query/scan cost if
+/// a very short probe interval outpaces the age-based prune cycle.
+const MAX_SUMMARY_ROWS: i64 = 20_000;
+
 pub fn read_router() -> Router<AppState> {
     Router::new()
         .route("/", get(list_services))
         .route("/stream", get(stream_service_events))
         .route("/{id}/history", get(service_history))
+        .route("/{id}/uptime", get(service_uptime_summary))
 }
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
@@ -197,6 +203,52 @@ pub(crate) async fn service_history(
     }
 }
 
+/// Uptime percentages (24h/7d/30d), a heartbeat tail, and derived incidents
+/// for a single service, built from one fetch of its retained probe history.
+#[utoipa::path(
+    get,
+    path = "/api/v1/services/{id}/uptime",
+    tag = "services",
+    security(("cookieAuth" = [])),
+    params(
+        ("id" = i64, Path, description = "Service ID"),
+    ),
+    responses(
+        (status = 200, description = "Uptime summary", body = crate::db::models::UptimeSummary),
+        (status = 401, description = "Not authenticated"),
+        (status = 500, description = "Database error"),
+    )
+)]
+#[tracing::instrument(skip(state))]
+pub(crate) async fn service_uptime_summary(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> impl IntoResponse {
+    match sqlx::query_as::<_, ProbeHistoryPoint>(
+        "SELECT status, latency_ms, checked_at FROM probe_results \
+         WHERE service_id = ? ORDER BY checked_at DESC LIMIT ?",
+    )
+    .bind(id)
+    .bind(MAX_SUMMARY_ROWS)
+    .fetch_all(&state.db)
+    .await
+    {
+        Ok(mut points) => {
+            points.reverse();
+            let summary =
+                probe::uptime::compute_uptime_summary(&points, chrono::Utc::now().naive_utc());
+            (StatusCode::OK, Json(json!(summary)))
+        }
+        Err(e) => {
+            tracing::error!("Failed to fetch uptime summary for service {id}: {e}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to fetch uptime summary"})),
+            )
+        }
+    }
+}
+
 #[utoipa::path(
     post,
     path = "/api/v1/services",
@@ -286,7 +338,7 @@ pub(crate) async fn create_service(
             let probe_tx = state.probe_tx.clone();
             let probe_client = state.probe_client.clone();
             let probe_client_insecure = state.probe_client_insecure.clone();
-            let max_history = state.config.probe.max_history;
+            let retention_days = state.config.probe.history_retention_days;
             tokio::spawn(async move {
                 if let Ok(Some(svc)) = sqlx::query_as::<_, Service>(
                     "SELECT id, systemd_unit, discovery_source, display_name, description, url, \
@@ -307,7 +359,7 @@ pub(crate) async fn create_service(
                         );
 
                     if use_systemd {
-                        probe::uptime::probe_systemd_unit(&probe_db, &svc, max_history, &probe_tx)
+                        probe::uptime::probe_systemd_unit(&probe_db, &svc, retention_days, &probe_tx)
                             .await;
                     } else if svc.url.is_some() {
                         let client = if svc.skip_tls_verify {
@@ -315,7 +367,7 @@ pub(crate) async fn create_service(
                         } else {
                             &probe_client
                         };
-                        probe::uptime::probe_service(&probe_db, &svc, client, max_history, &probe_tx)
+                        probe::uptime::probe_service(&probe_db, &svc, client, retention_days, &probe_tx)
                             .await;
                     }
                 }

@@ -1,6 +1,7 @@
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
+use crate::components::history_modal::HistoryModal;
 use crate::components::modal_edit::{EditFormData, EditModal};
 use crate::components::modal_groups::GroupsModal;
 use crate::components::quick_link_modal::{QuickLinkFormData, QuickLinkModal};
@@ -17,6 +18,7 @@ pub(super) fn DashboardModals(
     show_groups_modal: RwSignal<bool>,
     edit_target: RwSignal<Option<(i64, EditFormData)>>,
     edit_link_target: RwSignal<Option<(i64, QuickLinkFormData)>>,
+    history_target: RwSignal<Option<(i64, String)>>,
 ) -> impl IntoView {
     let on_save = Callback::new(move |data: EditFormData| {
         spawn_local(async move {
@@ -150,5 +152,8 @@ pub(super) fn DashboardModals(
                 />
             }
         })}
+
+        // Uptime history modal
+        <HistoryModal target=history_target />
     }
 }

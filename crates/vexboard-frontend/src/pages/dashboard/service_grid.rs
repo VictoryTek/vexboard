@@ -20,6 +20,7 @@ pub(super) fn ServiceGrid(
     section_drag_src: RwSignal<Option<(String, usize)>>,
     section_drag_over: RwSignal<Option<(String, usize)>>,
     edit_target: RwSignal<Option<(i64, EditFormData)>>,
+    history_target: RwSignal<Option<(i64, String)>>,
 ) -> impl IntoView {
     let current_user = use_context::<RwSignal<Option<CurrentUser>>>();
     let is_admin = move || {
@@ -65,6 +66,7 @@ pub(super) fn ServiceGrid(
                         probe_interval: svc.probe_interval,
                         skip_tls_verify: svc.skip_tls_verify,
                     };
+                    let name_for_history = svc.display_name.clone();
                     let data = ServiceData {
                         id: svc.id,
                         systemd_unit: svc.systemd_unit,
@@ -93,7 +95,11 @@ pub(super) fn ServiceGrid(
                     } else {
                         (None, None)
                     };
-                    view! { <ServiceCard service=data live_status=live_status on_delete=on_delete on_edit=on_edit /> }
+                    // Viewing uptime history is a read action available to every user, unlike edit/delete.
+                    let on_history = Some(Callback::new(move |_: i64| {
+                        history_target.set(Some((id, name_for_history.clone())));
+                    }));
+                    view! { <ServiceCard service=data live_status=live_status on_delete=on_delete on_edit=on_edit on_history=on_history /> }
                 };
 
                 if svcs.is_empty() {

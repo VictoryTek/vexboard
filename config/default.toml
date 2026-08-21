@@ -123,7 +123,7 @@ exclude_images = []
 [probe]
 default_interval_secs = 30
 timeout_secs = 5
-max_history = 100  # probe_results rows per service to retain
+history_retention_days = 30  # days of probe_results kept per service
 
 [metrics]
 push_interval_ms = 2000  # SSE push frequency

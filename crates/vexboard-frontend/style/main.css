@@ -783,6 +783,100 @@
     background-color: var(--color-accent);
   }
 
+  /* ── Uptime history modal ── */
+  .history-stats {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .history-stat {
+    flex: 1;
+    background-color: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: 0.625rem;
+    padding: 0.75rem;
+    text-align: center;
+  }
+
+  .history-stat-value {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .history-stat-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    margin: 0.2rem 0 0;
+  }
+
+  .history-heartbeat {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 1.25rem;
+  }
+
+  .history-heartbeat-bar {
+    flex: 1;
+    height: 28px;
+    min-width: 3px;
+    border-radius: 3px;
+  }
+
+  .history-incidents-title {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    margin: 0 0 0.625rem;
+  }
+
+  .history-incidents {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+
+  .history-incident-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+    padding: 0.5rem 0.625rem;
+    background-color: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+  }
+
+  .history-incident-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 0.3rem;
+  }
+
+  .history-incident-range {
+    font-size: 0.78rem;
+    color: var(--color-text-primary);
+    margin: 0;
+    font-family: ui-monospace, monospace;
+  }
+
+  .history-incident-meta {
+    font-size: 0.68rem;
+    color: var(--color-text-muted);
+    margin: 0.15rem 0 0;
+  }
+
   /* ── Avatar swatch picker ── */
   .avatar-swatch-row {
     display: flex;

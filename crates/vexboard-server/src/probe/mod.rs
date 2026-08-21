@@ -53,7 +53,7 @@ pub async fn start_probe_loop(
                 let tx = status_tx.clone();
                 let client = client.clone();
                 let insecure_client = insecure_client.clone();
-                let max_history = config.max_history;
+                let retention_days = config.history_retention_days;
 
                 tokio::spawn(async move {
                     // Docker/Podman discoveries store the container name in
@@ -66,14 +66,14 @@ pub async fn start_probe_loop(
                         );
 
                     if use_systemd {
-                        uptime::probe_systemd_unit(&db, &svc, max_history, &tx).await;
+                        uptime::probe_systemd_unit(&db, &svc, retention_days, &tx).await;
                     } else if svc.url.is_some() {
                         let client = if svc.skip_tls_verify {
                             &insecure_client
                         } else {
                             &client
                         };
-                        uptime::probe_service(&db, &svc, client, max_history, &tx).await;
+                        uptime::probe_service(&db, &svc, client, retention_days, &tx).await;
                     }
                 });
             }

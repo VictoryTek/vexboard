@@ -169,7 +169,8 @@ frontend as static assets and exposes a REST + SSE API.
 4. Discovery loops run on configurable intervals (default 60 s), writing
    discovered units to an `Arc<RwLock<Vec<DiscoveredUnit>>>` in memory.
 5. Probe loops issue HTTP requests to each service URL and write results to
-   `probe_results`; history is pruned to `max_history` rows per service.
+   `probe_results`; history older than `probe.history_retention_days` is
+   pruned per service.
 6. All mutating API calls are gated by `require_auth` middleware (session
    cookie check) and write a row to the `audit_log` table.
 
