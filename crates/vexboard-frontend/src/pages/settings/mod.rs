@@ -1,6 +1,7 @@
 mod about;
 mod appearance;
 mod discovery;
+mod notifications;
 mod security;
 mod ui;
 mod users;
@@ -13,6 +14,7 @@ use crate::CurrentUser;
 use about::AboutSection;
 use appearance::AppearanceSection;
 use discovery::DiscoverySection;
+use notifications::NotificationsSection;
 use security::SecuritySection;
 use users::UsersSection;
 
@@ -22,6 +24,7 @@ enum Section {
     Discovery,
     Security,
     Users,
+    Notifications,
     About,
 }
 
@@ -118,6 +121,17 @@ pub fn SettingsPage() -> impl IntoView {
                             </svg>
                             "Users"
                         </button>
+                        <button
+                            class=move || tab_class(active.get(), Section::Notifications)
+                            on:click=move |_| set_active.set(Section::Notifications)
+                        >
+                            // Bell icon
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                            </svg>
+                            "Notifications"
+                        </button>
                     </Show>
 
                     <p class="settings-rail-group">"About"</p>
@@ -147,6 +161,9 @@ pub fn SettingsPage() -> impl IntoView {
                     </Show>
                     <Show when=move || active.get() == Section::Users && is_admin()>
                         <UsersSection />
+                    </Show>
+                    <Show when=move || active.get() == Section::Notifications && is_admin()>
+                        <NotificationsSection />
                     </Show>
                     <Show when=move || active.get() == Section::About>
                         <AboutSection />

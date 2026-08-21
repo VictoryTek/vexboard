@@ -119,6 +119,12 @@ pub(crate) async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
         sqlx::raw_sql(skip_tls_verify_sql).execute(pool).await?;
     }
 
+    // Notification channels table (010_notification_channels.sql) — idempotent (IF NOT EXISTS).
+    let notification_channels_sql = include_str!("migrations/010_notification_channels.sql");
+    sqlx::raw_sql(notification_channels_sql)
+        .execute(pool)
+        .await?;
+
     tracing::info!("Database migrations applied");
     Ok(())
 }

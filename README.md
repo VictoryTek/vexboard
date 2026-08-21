@@ -67,12 +67,12 @@ the module options.
 services.vexboard.settings = {
   auth.secure_cookies    = true;   # enable when behind TLS
   discovery.interval_secs = 30;
-  notifications.webhooks = [
-    { url = "https://hooks.example.com/vexboard";
-      events = [ "service.down" "service.up" ]; }
-  ];
+  notifications.webhook_secret = "";   # optional global HMAC signing secret
 };
 ```
+
+Notification destinations (webhook / Discord / ntfy) are managed from the
+Settings UI and stored in the database, not declared here.
 
 **Override the package** (e.g. to use a local checkout):
 

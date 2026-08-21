@@ -777,3 +777,71 @@ async fn test_control_manual_service_returns_400() {
         .unwrap()
         .contains("isn't backed by a systemd unit or container"));
 }
+
+#[tokio::test]
+async fn test_create_notification_channel_rejects_invalid_kind() {
+    let app = TestApp::new().await;
+    app.seed_admin("admin", "password123").await;
+    let (_, cookie) = app.login("admin", "password123").await;
+
+    let payload = serde_json::json!({
+        "name": "Bad Channel",
+        "kind": "sms",
+        "target": "https://example.com/hook"
+    });
+    let (status, body) = app
+        .post_json("/api/v1/notifications/channels", payload, &cookie)
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body["error"].as_str().unwrap().contains("kind"));
+}
+
+#[tokio::test]
+async fn test_create_list_and_delete_notification_channel() {
+    let app = TestApp::new().await;
+    app.seed_admin("admin", "password123").await;
+    let (_, cookie) = app.login("admin", "password123").await;
+
+    let payload = serde_json::json!({
+        "name": "Ops Discord",
+        "kind": "discord",
+        "target": "https://discord.com/api/webhooks/123/abc",
+        "events": ["service.down"]
+    });
+    let (status, created) = app
+        .post_json("/api/v1/notifications/channels", payload, &cookie)
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let id = created["id"].as_i64().unwrap();
+
+    let (list_status, list_body) = app
+        .get_json("/api/v1/notifications/channels", &cookie)
+        .await;
+    assert_eq!(list_status, StatusCode::OK);
+    let channels = list_body.as_array().unwrap();
+    assert_eq!(channels.len(), 1);
+    assert_eq!(channels[0]["name"], "Ops Discord");
+    // secret must never round-trip in a response, even when unset.
+    assert!(channels[0].get("secret").is_none());
+
+    let (del_status, _) = app
+        .delete_req(&format!("/api/v1/notifications/channels/{id}"), &cookie)
+        .await;
+    assert_eq!(del_status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_test_unknown_notification_channel_returns_404() {
+    let app = TestApp::new().await;
+    app.seed_admin("admin", "password123").await;
+    let (_, cookie) = app.login("admin", "password123").await;
+
+    let (status, _) = app
+        .post_json(
+            "/api/v1/notifications/channels/99999/test",
+            serde_json::json!({}),
+            &cookie,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}

@@ -237,3 +237,44 @@ pub struct ReorderItem {
     pub id: i64,
     pub sort_order: i64,
 }
+
+#[derive(Debug, Clone, Serialize, sqlx::FromRow, utoipa::ToSchema)]
+pub struct NotificationChannel {
+    pub id: i64,
+    pub name: String,
+    /// `"webhook"`, `"discord"`, or `"ntfy"`.
+    pub kind: String,
+    pub target: String,
+    /// Write-only, like a password hash — never sent back to the client.
+    #[serde(skip_serializing)]
+    pub secret: Option<String>,
+    /// JSON array of event types as text (e.g. `["service.down"]`); empty
+    /// array means all events. Exposed as-is, matching how `Service.tags`
+    /// already round-trips a JSON-array-as-text column to the frontend.
+    pub events: String,
+    pub enabled: bool,
+    pub created_at: Option<NaiveDateTime>,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct CreateNotificationChannel {
+    pub name: String,
+    pub kind: String,
+    pub target: String,
+    #[serde(default)]
+    pub secret: Option<String>,
+    #[serde(default)]
+    pub events: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct UpdateNotificationChannel {
+    pub name: Option<String>,
+    pub kind: Option<String>,
+    pub target: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_some")]
+    #[schema(value_type = Option<String>)]
+    pub secret: Option<Option<String>>,
+    pub events: Option<Vec<String>>,
+    pub enabled: Option<bool>,
+}

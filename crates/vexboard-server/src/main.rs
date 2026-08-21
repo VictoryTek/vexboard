@@ -264,8 +264,9 @@ async fn main() -> anyhow::Result<()> {
         .timeout(std::time::Duration::from_secs(10))
         .build()
         .unwrap_or_default();
+    let notify_db = db.clone();
     tokio::spawn(async move {
-        notify::notification_loop(notify_rx, notify_config, notify_client).await;
+        notify::notification_loop(notify_rx, notify_config, notify_client, notify_db).await;
     });
 
     // Build router.

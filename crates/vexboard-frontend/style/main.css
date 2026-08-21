@@ -735,6 +735,7 @@
   .settings-add-user-fields select.form-input { flex: 0 0 auto; }
 
   .settings-form-error { font-size: 0.75rem; color: var(--color-danger); margin: 0; }
+  .settings-form-success { font-size: 0.75rem; color: var(--color-success); margin: 0; }
 
   @media (max-width: 860px) {
     .settings-shell { grid-template-columns: 1fr; gap: 1.25rem; }

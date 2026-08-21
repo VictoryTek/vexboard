@@ -4,6 +4,7 @@ pub mod config;
 pub mod groups;
 pub mod health;
 pub mod metrics;
+pub mod notifications;
 pub mod openapi;
 pub mod quick_links;
 pub mod services;
@@ -47,6 +48,7 @@ pub fn router(auth_mode: &str, state: AppState) -> Router<AppState> {
         .nest("/api/v1/discovery", crate::discovery::router())
         .nest("/api/v1/users", users::router())
         .nest("/api/v1/settings", settings::router())
+        .nest("/api/v1/notifications", notifications::router())
         .nest("/api/v1/audit", audit::router());
     let admin_protected = if auth_disabled {
         admin_protected
