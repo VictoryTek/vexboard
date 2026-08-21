@@ -491,53 +491,137 @@
   .acct-modal .error-msg { color: #e05c5c; font-size: 0.85rem; margin-top: 8px; }
   .acct-modal .success-msg { color: #5ce07a; font-size: 0.85rem; margin-top: 8px; }
 
-  /* ── Settings page: sectioned list ── */
-  .settings-about-banner {
+  /* ── Settings page: two-pane layout ── */
+  .settings-shell {
+    display: grid;
+    grid-template-columns: 216px 1fr;
+    gap: 2.5rem;
+    align-items: start;
+  }
+
+  .settings-rail {
+    position: sticky;
+    top: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .settings-rail-group {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    margin: 0;
+    padding: 1rem 0.75rem 0.375rem;
+  }
+
+  .settings-rail-group:first-child { padding-top: 0.25rem; }
+
+  .settings-tab {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    background-color: var(--color-bg-elevated);
-    border: 1px solid var(--color-border);
-    border-radius: 10px;
-    padding: 0.875rem 1.125rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .settings-about-banner .settings-section-icon {
+    gap: 0.625rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    border: none;
+    background: transparent;
     color: var(--color-text-secondary);
+    font-size: 0.85rem;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 120ms, color 120ms;
   }
 
-  .settings-about-text {
-    font-size: 0.8rem;
-    color: var(--color-text-secondary);
+  .settings-tab svg {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    stroke-width: 2;
   }
 
-  .settings-about-text strong {
+  .settings-tab:hover {
+    background-color: var(--color-bg-hover);
     color: var(--color-text-primary);
+  }
+
+  .settings-tab-active,
+  .settings-tab-active:hover {
+    background-color: var(--color-accent-dim);
+    color: var(--color-accent);
     font-weight: 600;
   }
 
-  .settings-list {
-    background-color: var(--color-bg-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 12px;
-    padding: 0 1.5rem;
+  .settings-pane { max-width: 600px; min-width: 0; }
+
+  .settings-pane-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.25rem;
+    color: var(--color-text-primary);
   }
 
-  .settings-row {
+  .settings-pane-sub {
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+    margin: 0 0 1.25rem;
+    line-height: 1.5;
+  }
+
+  .settings-card {
+    background-color: var(--color-bg-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 11px;
+    margin-bottom: 1.25rem;
+  }
+
+  .settings-card-head {
+    padding: 0.625rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+
+  .settings-card-row {
     display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 2rem;
-    padding: 1.5rem 0;
+    align-items: center;
+    gap: 1.25rem;
+    padding: 0.875rem 1rem;
     border-bottom: 1px solid var(--color-border);
   }
 
-  .settings-row:last-child { border-bottom: none; }
+  .settings-card-row:last-child { border-bottom: none; }
 
-  .settings-row-label { flex: 0 0 240px; }
+  .settings-card-row.settings-card-row-stack {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
 
-  .settings-row-control { flex: 1; min-width: 0; }
+  .settings-card-row-txt { flex: 1; min-width: 0; }
+
+  .settings-card-row-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0;
+  }
+
+  .settings-card-row-hint {
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+    margin: 0.2rem 0 0;
+    line-height: 1.5;
+  }
+
+  .settings-card-row-ctl { flex-shrink: 0; }
 
   .settings-option-row {
     display: flex;
@@ -545,26 +629,111 @@
     flex-wrap: wrap;
   }
 
-  @media (max-width: 720px) {
-    .settings-row { flex-direction: column; gap: 0.75rem; }
-    .settings-row-label { flex: none; }
+  /* ── Users pane ── */
+  .settings-user-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.625rem 1rem;
+    border-bottom: 1px solid var(--color-border);
   }
 
-  .settings-section-header {
+  .settings-user-row:last-child { border-bottom: none; }
+
+  .settings-user-id {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--color-text-primary);
-    margin-bottom: 0.3rem;
+    min-width: 0;
   }
 
-  .settings-section-icon {
-    width: 16px;
-    height: 16px;
+  .settings-user-name {
+    font-size: 0.82rem;
+    color: var(--color-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .settings-role-badge {
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-radius: 20px;
+    padding: 1px 7px;
     flex-shrink: 0;
+  }
+
+  .settings-role-badge-admin {
     color: var(--color-accent);
+    background-color: var(--color-accent-dim);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+  }
+
+  .settings-role-badge-viewer {
+    color: var(--color-text-muted);
+    background-color: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+  }
+
+  .settings-user-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .settings-btn-sm { font-size: 0.7rem; padding: 0.2rem 0.55rem; }
+
+  .settings-btn-ghost {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    font-size: 0.7rem;
+    padding: 0.2rem 0.4rem;
+    transition: color 120ms;
+  }
+
+  .settings-btn-ghost:hover { color: var(--color-danger); }
+
+  .settings-add-user {
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+    padding: 0.875rem 1rem;
+  }
+
+  .settings-add-user-fields {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .settings-add-user-fields .form-input { flex: 1; min-width: 120px; }
+  .settings-add-user-fields select.form-input { flex: 0 0 auto; }
+
+  .settings-form-error { font-size: 0.75rem; color: var(--color-danger); margin: 0; }
+
+  @media (max-width: 860px) {
+    .settings-shell { grid-template-columns: 1fr; gap: 1.25rem; }
+    .settings-rail {
+      position: static;
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 0.375rem;
+      border-bottom: 1px solid var(--color-border);
+      padding-bottom: 1rem;
+    }
+    .settings-rail-group { display: none; }
+    .settings-pane { max-width: none; }
+  }
+
+  @media (max-width: 560px) {
+    .settings-card-row { flex-direction: column; align-items: stretch; gap: 0.625rem; }
+    .settings-add-user-fields .form-input { min-width: 100%; }
   }
 
   .settings-nav-option {
