@@ -3,6 +3,23 @@ use std::collections::HashMap;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+struct AlertRulesFe {
+    fail_threshold: i64,
+    repeat_interval_mins: i64,
+}
+
+async fn fetch_rules() -> Option<AlertRulesFe> {
+    let resp = gloo_net::http::Request::get("/api/v1/notifications/rules")
+        .send()
+        .await
+        .ok()?;
+    if !resp.ok() {
+        return None;
+    }
+    resp.json::<AlertRulesFe>().await.ok()
+}
+
 #[derive(Debug, Clone, serde::Deserialize)]
 struct ChannelFe {
     id: i64,
@@ -28,7 +45,23 @@ fn kind_label(kind: &str) -> &'static str {
     match kind {
         "discord" => "Discord",
         "ntfy" => "ntfy",
+        "telegram" => "Telegram",
+        "gotify" => "Gotify",
         _ => "Webhook",
+    }
+}
+
+/// Telegram and Gotify have no unsigned mode — the secret field holds a
+/// required credential (bot token / app token), not an optional signing key.
+fn kind_requires_secret(kind: &str) -> bool {
+    matches!(kind, "telegram" | "gotify")
+}
+
+fn secret_placeholder(kind: &str) -> &'static str {
+    match kind {
+        "telegram" => "Bot token",
+        "gotify" => "App token",
+        _ => "Signing secret (optional)",
     }
 }
 
@@ -57,12 +90,54 @@ pub(super) fn NotificationsSection() -> impl IntoView {
     let (form_error, set_form_error) = signal(String::new());
     let test_results: RwSignal<HashMap<i64, (bool, String)>> = RwSignal::new(HashMap::new());
 
-    #[cfg(target_arch = "wasm32")]
-    leptos::prelude::Effect::new(move |_| {
+    let fail_threshold = RwSignal::new(1i64);
+    let repeat_interval_mins = RwSignal::new(0i64);
+    let rules_msg: RwSignal<Option<(bool, String)>> = RwSignal::new(None);
+    let rules_saving = RwSignal::new(false);
+
+    Effect::new(move |_| {
         spawn_local(async move {
             channels.set(fetch_channels().await);
         });
+        spawn_local(async move {
+            if let Some(rules) = fetch_rules().await {
+                fail_threshold.set(rules.fail_threshold);
+                repeat_interval_mins.set(rules.repeat_interval_mins);
+            }
+        });
     });
+
+    let save_rules = move |_| {
+        rules_saving.set(true);
+        rules_msg.set(None);
+        let payload = AlertRulesFe {
+            fail_threshold: fail_threshold.get().max(1),
+            repeat_interval_mins: repeat_interval_mins.get().max(0),
+        };
+        spawn_local(async move {
+            let outcome = if let Ok(req) =
+                gloo_net::http::Request::patch("/api/v1/notifications/rules").json(&payload)
+            {
+                req.send().await.ok()
+            } else {
+                None
+            };
+            rules_saving.set(false);
+            rules_msg.set(Some(match outcome {
+                Some(resp) if resp.ok() => (false, "Saved.".to_string()),
+                Some(resp) => {
+                    let msg = resp
+                        .json::<serde_json::Value>()
+                        .await
+                        .ok()
+                        .and_then(|v| v["error"].as_str().map(|s| s.to_string()))
+                        .unwrap_or_else(|| "Failed to save.".to_string());
+                    (true, msg)
+                }
+                None => (true, "Could not reach the server.".to_string()),
+            }));
+        });
+    };
 
     view! {
         <div>
@@ -178,19 +253,21 @@ pub(super) fn NotificationsSection() -> impl IntoView {
                             <option value="webhook" selected=true>"Webhook"</option>
                             <option value="discord">"Discord"</option>
                             <option value="ntfy">"ntfy"</option>
+                            <option value="telegram">"Telegram"</option>
+                            <option value="gotify">"Gotify"</option>
                         </select>
                         <input
                             type="text"
-                            placeholder="Target URL"
+                            placeholder=move || if new_kind.get() == "telegram" { "Chat ID" } else { "Target URL" }
                             class="form-input"
                             style="flex:2; min-width:200px;"
                             prop:value=new_target
                             on:input=move |ev| set_new_target.set(event_target_value(&ev))
                         />
-                        <Show when=move || new_kind.get() == "webhook">
+                        <Show when=move || new_kind.get() != "discord" && new_kind.get() != "ntfy">
                             <input
                                 type="text"
-                                placeholder="Signing secret (optional)"
+                                placeholder=move || secret_placeholder(&new_kind.get())
                                 class="form-input"
                                 prop:value=new_secret
                                 on:input=move |ev| set_new_secret.set(event_target_value(&ev))
@@ -201,13 +278,17 @@ pub(super) fn NotificationsSection() -> impl IntoView {
                             on:click=move |_| {
                                 let name = new_name.get();
                                 let target = new_target.get();
+                                let kind = new_kind.get();
+                                let secret = new_secret.get();
                                 if name.trim().is_empty() || target.trim().is_empty() {
                                     set_form_error.set("Name and target URL are required.".to_string());
                                     return;
                                 }
+                                if kind_requires_secret(&kind) && secret.trim().is_empty() {
+                                    set_form_error.set(format!("{} require a {}.", kind_label(&kind), secret_placeholder(&kind).to_lowercase()));
+                                    return;
+                                }
                                 set_form_error.set(String::new());
-                                let kind = new_kind.get();
-                                let secret = new_secret.get();
                                 let mut events = Vec::new();
                                 if filter_down.get() { events.push("service.down".to_string()); }
                                 if filter_up.get() { events.push("service.up".to_string()); }
@@ -254,6 +335,73 @@ pub(super) fn NotificationsSection() -> impl IntoView {
                         <p class="settings-form-error">{form_error}</p>
                     </Show>
                 </div>
+            </div>
+
+            <div class="settings-card">
+                <div class="settings-card-head">"Rules"</div>
+                <div class="settings-card-row">
+                    <div class="settings-card-row-txt">
+                        <p class="settings-card-row-label">"Wait for"</p>
+                        <p class="settings-card-row-hint">
+                            "Consecutive failed checks before alerting. Stops one blip from waking you up."
+                        </p>
+                    </div>
+                    <div class="settings-card-row-ctl" style="display:flex; align-items:center; gap:0.5rem;">
+                        <input
+                            type="number"
+                            min="1"
+                            class="form-input"
+                            style="width:70px;"
+                            prop:value=move || fail_threshold.get().to_string()
+                            on:input=move |ev| {
+                                if let Ok(v) = event_target_value(&ev).parse::<i64>() {
+                                    fail_threshold.set(v);
+                                }
+                            }
+                        />
+                        <span class="text-xs" style="color:var(--color-text-muted);">"check(s)"</span>
+                    </div>
+                </div>
+                <div class="settings-card-row">
+                    <div class="settings-card-row-txt">
+                        <p class="settings-card-row-label">"Repeat while still down"</p>
+                        <p class="settings-card-row-hint">
+                            "Send another alert this often while the outage continues. 0 alerts only once."
+                        </p>
+                    </div>
+                    <div class="settings-card-row-ctl" style="display:flex; align-items:center; gap:0.5rem;">
+                        <input
+                            type="number"
+                            min="0"
+                            class="form-input"
+                            style="width:70px;"
+                            prop:value=move || repeat_interval_mins.get().to_string()
+                            on:input=move |ev| {
+                                if let Ok(v) = event_target_value(&ev).parse::<i64>() {
+                                    repeat_interval_mins.set(v);
+                                }
+                            }
+                        />
+                        <span class="text-xs" style="color:var(--color-text-muted);">"minute(s) (0 = never)"</span>
+                    </div>
+                </div>
+                <div class="settings-card-row">
+                    <div class="settings-card-row-ctl" style="margin-left:auto;">
+                        <button
+                            class="btn-primary settings-btn-sm"
+                            disabled=move || rules_saving.get()
+                            on:click=save_rules
+                        >"Save"</button>
+                    </div>
+                </div>
+                {move || rules_msg.get().map(|(is_err, msg)| {
+                    let class = if is_err { "settings-form-error" } else { "settings-form-success" };
+                    view! {
+                        <div class="settings-card-row">
+                            <p class=class>{msg}</p>
+                        </div>
+                    }
+                })}
             </div>
         </div>
     }

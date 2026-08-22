@@ -10,7 +10,7 @@ use crate::db::models::{
 use crate::AppState;
 
 const EXPORT_VERSION: u32 = 1;
-const VALID_CHANNEL_KINDS: [&str; 3] = ["webhook", "discord", "ntfy"];
+const VALID_CHANNEL_KINDS: [&str; 5] = ["webhook", "discord", "ntfy", "telegram", "gotify"];
 
 /// Every route here is admin-only. `export`/`export_nix` are read-only;
 /// `import` is additive-only — it never deletes or overwrites existing rows.

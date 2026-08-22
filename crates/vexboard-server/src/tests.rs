@@ -230,6 +230,24 @@ impl TestApp {
         (status, body)
     }
 
+    async fn patch_json(&self, uri: &str, payload: Value, cookie: &str) -> (StatusCode, Value) {
+        let mut builder = Request::builder()
+            .method("PATCH")
+            .uri(uri)
+            .header("content-type", "application/json");
+        if !cookie.is_empty() {
+            builder = builder.header("cookie", cookie);
+        }
+        let req = builder.body(Body::from(payload.to_string())).unwrap();
+        let resp = self.app.clone().oneshot(req).await.unwrap();
+        let status = resp.status();
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+        (status, body)
+    }
+
     async fn delete_req(&self, uri: &str, cookie: &str) -> (StatusCode, Value) {
         let mut builder = Request::builder().method("DELETE").uri(uri);
         if !cookie.is_empty() {
@@ -976,4 +994,87 @@ async fn test_export_nix_excludes_secrets() {
     assert!(!body.contains("test-secret"));
     assert!(!body.contains("auth.secret"));
     assert!(!body.contains("webhook_secret"));
+}
+
+#[tokio::test]
+async fn test_telegram_channel_requires_secret() {
+    let app = TestApp::new().await;
+    app.seed_admin("admin", "password123").await;
+    let (_, cookie) = app.login("admin", "password123").await;
+
+    // No secret (bot token) — Telegram has no unsigned mode, unlike webhook.
+    let (status, body) = app
+        .post_json(
+            "/api/v1/notifications/channels",
+            serde_json::json!({"name": "My Bot", "kind": "telegram", "target": "12345"}),
+            &cookie,
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body["error"].as_str().unwrap().contains("require a token"));
+
+    // With a secret, it's accepted.
+    let (status2, _) = app
+        .post_json(
+            "/api/v1/notifications/channels",
+            serde_json::json!({
+                "name": "My Bot", "kind": "telegram", "target": "12345", "secret": "bot-token-123"
+            }),
+            &cookie,
+        )
+        .await;
+    assert_eq!(status2, StatusCode::CREATED);
+}
+
+#[tokio::test]
+async fn test_gotify_channel_requires_secret() {
+    let app = TestApp::new().await;
+    app.seed_admin("admin", "password123").await;
+    let (_, cookie) = app.login("admin", "password123").await;
+
+    let (status, _) = app
+        .post_json(
+            "/api/v1/notifications/channels",
+            serde_json::json!({"name": "Gotify", "kind": "gotify", "target": "https://gotify.example.com"}),
+            &cookie,
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_alert_rules_default_and_update() {
+    let app = TestApp::new().await;
+    app.seed_admin("admin", "password123").await;
+    let (_, cookie) = app.login("admin", "password123").await;
+
+    // Defaults reproduce the original behavior exactly: alert immediately, never repeat.
+    let (status, body) = app.get_json("/api/v1/notifications/rules", &cookie).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["fail_threshold"], 1);
+    assert_eq!(body["repeat_interval_mins"], 0);
+
+    // Invalid values are rejected.
+    let (bad_status, _) = app
+        .patch_json(
+            "/api/v1/notifications/rules",
+            serde_json::json!({"fail_threshold": 0, "repeat_interval_mins": 0}),
+            &cookie,
+        )
+        .await;
+    assert_eq!(bad_status, StatusCode::BAD_REQUEST);
+
+    // A valid update persists.
+    let (ok_status, _) = app
+        .patch_json(
+            "/api/v1/notifications/rules",
+            serde_json::json!({"fail_threshold": 3, "repeat_interval_mins": 30}),
+            &cookie,
+        )
+        .await;
+    assert_eq!(ok_status, StatusCode::OK);
+
+    let (_, refreshed) = app.get_json("/api/v1/notifications/rules", &cookie).await;
+    assert_eq!(refreshed["fail_threshold"], 3);
+    assert_eq!(refreshed["repeat_interval_mins"], 30);
 }

@@ -5,6 +5,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tower_sessions::Session;
 
@@ -16,7 +17,14 @@ use crate::notify;
 use crate::probe::uptime::ProbeEvent;
 use crate::AppState;
 
-const VALID_KINDS: [&str; 3] = ["webhook", "discord", "ntfy"];
+const VALID_KINDS: [&str; 5] = ["webhook", "discord", "ntfy", "telegram", "gotify"];
+
+/// Telegram and Gotify have no unsigned mode — unlike the webhook kind's
+/// optional HMAC secret, their `secret` field holds a required credential
+/// (bot token / app token).
+fn requires_secret(kind: &str) -> bool {
+    matches!(kind, "telegram" | "gotify")
+}
 
 /// Every route here is admin-only, with no read tier for viewers — unlike
 /// services/groups, a channel's `target` can itself function as a bearer
@@ -29,6 +37,7 @@ pub fn router() -> Router<AppState> {
             axum::routing::patch(update_channel).delete(delete_channel),
         )
         .route("/channels/{id}/test", post(test_channel))
+        .route("/rules", get(get_rules).patch(update_rules))
 }
 
 #[utoipa::path(
@@ -88,6 +97,14 @@ pub(crate) async fn create_channel(
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({"error": format!("kind must be one of {VALID_KINDS:?}")})),
+        );
+    }
+    if requires_secret(&payload.kind) && payload.secret.as_deref().unwrap_or("").is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(
+                json!({"error": format!("{} channels require a token in the secret field", payload.kind)}),
+            ),
         );
     }
 
@@ -196,6 +213,12 @@ pub(crate) async fn update_channel(
     let name = payload.name.unwrap_or(existing.name);
     let target = payload.target.unwrap_or(existing.target);
     let secret = payload.secret.unwrap_or(existing.secret);
+    if requires_secret(&kind) && secret.as_deref().unwrap_or("").is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": format!("{kind} channels require a token in the secret field")})),
+        );
+    }
     let events_json = match payload.events {
         Some(e) => serde_json::to_string(&e).unwrap_or_else(|_| "[]".to_string()),
         None => existing.events,
@@ -369,4 +392,111 @@ pub(crate) async fn test_channel(
         Ok(()) => (StatusCode::OK, Json(json!({"status": "ok"}))),
         Err(e) => (StatusCode::BAD_GATEWAY, Json(json!({"error": e}))),
     }
+}
+
+/// How many consecutive failed probes before an outage alerts, and how often
+/// (if at all) to repeat the alert while still down. Backed by the generic
+/// `settings` key/value table — not `config.toml` — so they're editable here
+/// without a restart. Defaults (threshold 1, interval 0) reproduce the
+/// original fire-on-every-transition behavior exactly.
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct AlertRules {
+    pub fail_threshold: i64,
+    pub repeat_interval_mins: i64,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/notifications/rules",
+    tag = "notifications",
+    security(("cookieAuth" = [])),
+    responses(
+        (status = 200, description = "Current alert rules", body = AlertRules),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Admin role required"),
+    )
+)]
+#[tracing::instrument(skip(state))]
+pub(crate) async fn get_rules(State(state): State<AppState>) -> impl IntoResponse {
+    let fail_threshold = db::get_setting(&state.db, "notify_fail_threshold")
+        .await
+        .ok()
+        .flatten()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(1);
+    let repeat_interval_mins = db::get_setting(&state.db, "notify_repeat_interval_mins")
+        .await
+        .ok()
+        .flatten()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
+    (
+        StatusCode::OK,
+        Json(AlertRules {
+            fail_threshold,
+            repeat_interval_mins,
+        }),
+    )
+}
+
+#[utoipa::path(
+    patch,
+    path = "/api/v1/notifications/rules",
+    tag = "notifications",
+    security(("cookieAuth" = [])),
+    request_body = AlertRules,
+    responses(
+        (status = 200, description = "Alert rules updated", body = AlertRules),
+        (status = 400, description = "fail_threshold must be >= 1, repeat_interval_mins must be >= 0"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Admin role required"),
+    )
+)]
+#[tracing::instrument(skip(state, session))]
+pub(crate) async fn update_rules(
+    State(state): State<AppState>,
+    session: Session,
+    Json(payload): Json<AlertRules>,
+) -> impl IntoResponse {
+    if payload.fail_threshold < 1 || payload.repeat_interval_mins < 0 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "error": "fail_threshold must be >= 1 and repeat_interval_mins must be >= 0"
+            })),
+        )
+            .into_response();
+    }
+
+    let _ = db::set_setting(
+        &state.db,
+        "notify_fail_threshold",
+        &payload.fail_threshold.to_string(),
+    )
+    .await;
+    let _ = db::set_setting(
+        &state.db,
+        "notify_repeat_interval_mins",
+        &payload.repeat_interval_mins.to_string(),
+    )
+    .await;
+
+    let actor = session
+        .get::<String>("username")
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "unknown".to_string());
+    db::audit::insert(
+        &state.db,
+        &actor,
+        "notifications.rules.update",
+        Some("settings"),
+        None,
+        Some(&json!(payload).to_string()),
+        None,
+    )
+    .await;
+
+    (StatusCode::OK, Json(payload)).into_response()
 }

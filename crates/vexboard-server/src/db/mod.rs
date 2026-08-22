@@ -125,6 +125,22 @@ pub(crate) async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
         .execute(pool)
         .await?;
 
+    // Widen notification_channels.kind to include telegram/gotify (011) — idempotent,
+    // guarded by inspecting the table's current CHECK constraint text since SQLite
+    // has no direct way to query a constraint's allowed values.
+    let notification_channels_table_sql: Option<String> = sqlx::query_scalar(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'notification_channels'",
+    )
+    .fetch_optional(pool)
+    .await?;
+    let needs_kind_widen = notification_channels_table_sql
+        .map(|sql| !sql.contains("'telegram'"))
+        .unwrap_or(false);
+    if needs_kind_widen {
+        let widen_kinds_sql = include_str!("migrations/011_notification_channel_kinds.sql");
+        sqlx::raw_sql(widen_kinds_sql).execute(pool).await?;
+    }
+
     tracing::info!("Database migrations applied");
     Ok(())
 }
