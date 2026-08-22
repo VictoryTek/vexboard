@@ -1,5 +1,6 @@
 mod about;
 mod appearance;
+mod backup;
 mod discovery;
 mod notifications;
 mod security;
@@ -13,6 +14,7 @@ use crate::CurrentUser;
 
 use about::AboutSection;
 use appearance::AppearanceSection;
+use backup::BackupSection;
 use discovery::DiscoverySection;
 use notifications::NotificationsSection;
 use security::SecuritySection;
@@ -25,6 +27,7 @@ enum Section {
     Security,
     Users,
     Notifications,
+    Backup,
     About,
 }
 
@@ -132,6 +135,18 @@ pub fn SettingsPage() -> impl IntoView {
                             </svg>
                             "Notifications"
                         </button>
+                        <button
+                            class=move || tab_class(active.get(), Section::Backup)
+                            on:click=move |_| set_active.set(Section::Backup)
+                        >
+                            // Database/backup icon
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                                <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                                <path d="M21 5v14c0 1.7-4 3-9 3s-9-1.3-9-3V5"/>
+                                <path d="M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/>
+                            </svg>
+                            "Backup & Data"
+                        </button>
                     </Show>
 
                     <p class="settings-rail-group">"About"</p>
@@ -164,6 +179,9 @@ pub fn SettingsPage() -> impl IntoView {
                     </Show>
                     <Show when=move || active.get() == Section::Notifications && is_admin()>
                         <NotificationsSection />
+                    </Show>
+                    <Show when=move || active.get() == Section::Backup && is_admin()>
+                        <BackupSection />
                     </Show>
                     <Show when=move || active.get() == Section::About>
                         <AboutSection />

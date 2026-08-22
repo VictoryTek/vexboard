@@ -1,6 +1,7 @@
 pub mod audit;
 pub mod auth;
 pub mod config;
+pub mod config_export;
 pub mod groups;
 pub mod health;
 pub mod metrics;
@@ -49,6 +50,7 @@ pub fn router(auth_mode: &str, state: AppState) -> Router<AppState> {
         .nest("/api/v1/users", users::router())
         .nest("/api/v1/settings", settings::router())
         .nest("/api/v1/notifications", notifications::router())
+        .nest("/api/v1/config", config_export::router())
         .nest("/api/v1/audit", audit::router());
     let admin_protected = if auth_disabled {
         admin_protected

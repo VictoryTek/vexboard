@@ -180,6 +180,20 @@ impl TestApp {
         (status, body)
     }
 
+    async fn get_text(&self, uri: &str, cookie: &str) -> (StatusCode, String) {
+        let mut builder = Request::builder().method("GET").uri(uri);
+        if !cookie.is_empty() {
+            builder = builder.header("cookie", cookie);
+        }
+        let req = builder.body(Body::empty()).unwrap();
+        let resp = self.app.clone().oneshot(req).await.unwrap();
+        let status = resp.status();
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        (status, String::from_utf8_lossy(&bytes).to_string())
+    }
+
     async fn post_json(&self, uri: &str, payload: Value, cookie: &str) -> (StatusCode, Value) {
         let mut builder = Request::builder()
             .method("POST")
@@ -880,4 +894,86 @@ async fn test_logs_stream_manual_service_returns_400() {
         .as_str()
         .unwrap()
         .contains("isn't backed by a systemd unit or container"));
+}
+
+#[tokio::test]
+async fn test_config_import_is_additive_and_dedupes_on_reimport() {
+    let app = TestApp::new().await;
+    app.seed_admin("admin", "password123").await;
+    let (_, cookie) = app.login("admin", "password123").await;
+
+    let bundle = serde_json::json!({
+        "version": 1,
+        "exported_at": "2026-01-01T00:00:00Z",
+        "groups": [{"name": "Media", "icon": null, "color": null, "sort_order": 0}],
+        "services": [{
+            "systemd_unit": "jellyfin.service",
+            "discovery_source": null,
+            "display_name": "Jellyfin",
+            "description": null,
+            "url": "http://localhost:8096",
+            "icon": null,
+            "group_name": "Media",
+            "sort_order": 0,
+            "probe_enabled": false,
+            "probe_interval": 30,
+            "tags": null,
+            "visible": true,
+            "skip_tls_verify": false
+        }],
+        "quick_links": [],
+        "notification_channels": [],
+        "settings": {"auth_mode": null}
+    });
+
+    // First import creates the group and the service.
+    let (status1, summary1) = app
+        .post_json("/api/v1/config/import", bundle.clone(), &cookie)
+        .await;
+    assert_eq!(status1, StatusCode::OK);
+    assert_eq!(summary1["groups_created"], 1);
+    assert_eq!(summary1["services_created"], 1);
+
+    // Re-importing the identical bundle must not duplicate anything: the
+    // group is reused (unique by name) and the service is skipped (its
+    // systemd_unit is already claimed) — additive-only, never destructive,
+    // never a silent duplicate either.
+    let (status2, summary2) = app
+        .post_json("/api/v1/config/import", bundle, &cookie)
+        .await;
+    assert_eq!(status2, StatusCode::OK);
+    assert_eq!(summary2["groups_created"], 0);
+    assert_eq!(summary2["groups_reused"], 1);
+    assert_eq!(summary2["services_created"], 0);
+    assert_eq!(summary2["services_skipped"], 1);
+
+    let (_, groups) = app.get_json("/api/v1/groups", &cookie).await;
+    assert_eq!(
+        groups.as_array().unwrap().len(),
+        1,
+        "group must not be duplicated"
+    );
+    let (_, services) = app.get_json("/api/v1/services", &cookie).await;
+    assert_eq!(
+        services.as_array().unwrap().len(),
+        1,
+        "service must not be duplicated"
+    );
+}
+
+#[tokio::test]
+async fn test_export_nix_excludes_secrets() {
+    let app = TestApp::new().await;
+    app.seed_admin("admin", "password123").await;
+    let (_, cookie) = app.login("admin", "password123").await;
+
+    let (status, body) = app.get_text("/api/v1/config/export/nix", &cookie).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.contains("services.vexboard.settings"));
+    assert!(body.contains("discovery.enabled"));
+    // The session-signing secret and webhook-signing secret are credentials —
+    // never allowed into generated Nix, per this app's own secretFile convention.
+    assert!(!body.contains("test-secret"));
+    assert!(!body.contains("auth.secret"));
+    assert!(!body.contains("webhook_secret"));
 }

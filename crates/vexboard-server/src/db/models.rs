@@ -278,3 +278,89 @@ pub struct UpdateNotificationChannel {
     pub events: Option<Vec<String>>,
     pub enabled: Option<bool>,
 }
+
+// --- Portable config export/import ---
+//
+// Deliberately separate from the read-models above: these are id-free (a
+// group's numeric id isn't portable across instances — a service/quick-link
+// references its group by name instead) and omit anything that shouldn't
+// round-trip through a shareable file (notification channel secrets, user
+// passwords — users aren't exported at all).
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, utoipa::ToSchema)]
+pub struct ExportedGroup {
+    pub name: String,
+    pub icon: Option<String>,
+    pub color: Option<String>,
+    pub sort_order: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct ExportedService {
+    pub systemd_unit: Option<String>,
+    pub discovery_source: Option<String>,
+    pub display_name: String,
+    pub description: Option<String>,
+    pub url: Option<String>,
+    pub icon: Option<String>,
+    pub group_name: Option<String>,
+    pub sort_order: i64,
+    pub probe_enabled: bool,
+    pub probe_interval: i64,
+    pub tags: Option<Vec<String>>,
+    pub visible: bool,
+    pub skip_tls_verify: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct ExportedQuickLink {
+    pub title: String,
+    pub url: String,
+    pub icon: Option<String>,
+    pub description: Option<String>,
+    pub group_name: Option<String>,
+    pub sort_order: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct ExportedNotificationChannel {
+    pub name: String,
+    pub kind: String,
+    pub target: String,
+    pub events: Vec<String>,
+    pub enabled: bool,
+}
+
+/// Exported for reference only — never re-applied on import. Silently
+/// changing whether the whole dashboard requires login, driven by an
+/// uploaded file, is too security-sensitive to automate; the admin
+/// changes it explicitly via the Security tab.
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct ExportedSettings {
+    pub auth_mode: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct ConfigExport {
+    pub version: u32,
+    /// RFC3339 timestamp.
+    pub exported_at: String,
+    pub groups: Vec<ExportedGroup>,
+    pub services: Vec<ExportedService>,
+    pub quick_links: Vec<ExportedQuickLink>,
+    pub notification_channels: Vec<ExportedNotificationChannel>,
+    pub settings: ExportedSettings,
+}
+
+/// Per-category created/skipped counts returned by import — the tractable
+/// version of "you'll see what changed," short of a full pre-commit diff.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct ConfigImportSummary {
+    pub groups_created: i64,
+    pub groups_reused: i64,
+    pub services_created: i64,
+    pub services_skipped: i64,
+    pub quick_links_created: i64,
+    pub notification_channels_created: i64,
+    pub notification_channels_skipped: i64,
+}
