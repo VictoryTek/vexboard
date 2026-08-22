@@ -26,6 +26,18 @@ use crate::probe;
 use crate::AppState;
 use tower_sessions::Session;
 
+/// A server-sent event stream of raw log lines, regardless of which
+/// backend (systemd journal or Docker/Podman) produced it.
+type BoxedLogStream =
+    std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Result<Event, Infallible>> + Send>>;
+
+fn to_sse_log_stream(
+    lines: impl tokio_stream::Stream<Item = std::io::Result<String>> + Send + 'static,
+) -> BoxedLogStream {
+    use tokio_stream::StreamExt;
+    Box::pin(lines.filter_map(|line| line.ok().map(|l| Ok(Event::default().data(l)))))
+}
+
 #[derive(sqlx::FromRow)]
 struct LatestProbe {
     service_id: i64,
@@ -66,6 +78,7 @@ pub fn admin_router() -> Router<AppState> {
         .route("/{id}/start", post(start_service))
         .route("/{id}/stop", post(stop_service))
         .route("/{id}/restart", post(restart_service))
+        .route("/{id}/logs/stream", get(service_logs_stream))
 }
 
 #[utoipa::path(
@@ -963,5 +976,116 @@ async fn control_service(
             )
                 .into_response()
         }
+    }
+}
+
+/// Live-tails a tracked service's backing unit or container. Admin-only —
+/// stricter than the read-only history/uptime routes, since log output is
+/// arbitrary text a service prints and occasionally isn't safe for a
+/// viewer role to see. The client only ever sends an id; the server
+/// resolves the unit/container itself, same as the control routes above.
+#[utoipa::path(
+    get,
+    path = "/api/v1/services/{id}/logs/stream",
+    tag = "services",
+    security(("cookieAuth" = [])),
+    params(("id" = i64, Path, description = "Service ID")),
+    responses(
+        (status = 200, description = "Server-sent event stream of raw log lines (text/event-stream)",
+         content_type = "text/event-stream"),
+        (status = 400, description = "Service has no systemd unit or container to tail"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Admin role required"),
+        (status = 404, description = "Service not found"),
+        (status = 502, description = "Failed to start the log stream"),
+    )
+)]
+#[tracing::instrument(skip(state))]
+pub(crate) async fn service_logs_stream(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> axum::response::Response {
+    let svc = match sqlx::query_as::<_, Service>(
+        "SELECT id, systemd_unit, discovery_source, display_name, description, url, icon, group_id, \
+         sort_order, probe_enabled, probe_interval, tags, visible, skip_tls_verify, created_at, updated_at \
+         FROM services WHERE id = ?",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await
+    {
+        Ok(Some(s)) => s,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Service not found"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            tracing::error!("Failed to fetch service {id} for log stream: {e}");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Database error"})),
+            )
+                .into_response();
+        }
+    };
+
+    let is_container = matches!(
+        svc.discovery_source.as_deref(),
+        Some("docker") | Some("podman")
+    );
+
+    let result: Result<BoxedLogStream, String> = if is_container {
+        match &svc.systemd_unit {
+            Some(name) => {
+                let socket = state
+                    .config
+                    .docker
+                    .sockets
+                    .iter()
+                    .map(|s| s.as_str())
+                    .find(|s| {
+                        let source = if s.contains("podman") {
+                            "podman"
+                        } else {
+                            "docker"
+                        };
+                        Some(source) == svc.discovery_source.as_deref()
+                    });
+                match socket {
+                    Some(socket) => control::docker::tail_container_logs(socket, name)
+                        .await
+                        .map(to_sse_log_stream)
+                        .map_err(|e| e.to_string()),
+                    None => Err(
+                        "No configured Docker/Podman socket matches this service's discovery source"
+                            .to_string(),
+                    ),
+                }
+            }
+            None => Err("Service has no container name recorded".to_string()),
+        }
+    } else if let Some(unit) = &svc.systemd_unit {
+        control::systemd::tail_unit_logs(unit)
+            .await
+            .map(to_sse_log_stream)
+            .map_err(|e| e.to_string())
+    } else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "error": "This service isn't backed by a systemd unit or container and can't be controlled."
+            })),
+        )
+            .into_response();
+    };
+
+    match result {
+        Ok(stream) => Sse::new(stream)
+            .keep_alive(KeepAlive::new().interval(Duration::from_secs(15)))
+            .into_response(),
+        Err(msg) => (StatusCode::BAD_GATEWAY, Json(json!({"error": msg}))).into_response(),
     }
 }

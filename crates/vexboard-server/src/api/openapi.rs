@@ -43,6 +43,7 @@ impl Modify for SecurityAddon {
         crate::api::services::start_service,
         crate::api::services::stop_service,
         crate::api::services::restart_service,
+        crate::api::services::service_logs_stream,
         crate::api::services::reorder_services,
         crate::api::groups::list_groups,
         crate::api::groups::create_group,

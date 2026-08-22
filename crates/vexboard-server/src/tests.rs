@@ -845,3 +845,39 @@ async fn test_test_unknown_notification_channel_returns_404() {
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn test_logs_stream_unknown_service_returns_404() {
+    let app = TestApp::new().await;
+    app.seed_admin("admin", "password123").await;
+    let (_, cookie) = app.login("admin", "password123").await;
+
+    let (status, _) = app
+        .get_json("/api/v1/services/99999/logs/stream", &cookie)
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_logs_stream_manual_service_returns_400() {
+    let app = TestApp::new().await;
+    app.seed_admin("admin", "password123").await;
+    let (_, cookie) = app.login("admin", "password123").await;
+
+    let payload = serde_json::json!({
+        "display_name": "Manual Service",
+        "url": "http://localhost:8080",
+        "probe_enabled": false
+    });
+    let (_, created) = app.post_json("/api/v1/services", payload, &cookie).await;
+    let id = created["id"].as_i64().unwrap();
+
+    let (status, body) = app
+        .get_json(&format!("/api/v1/services/{id}/logs/stream"), &cookie)
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body["error"]
+        .as_str()
+        .unwrap()
+        .contains("isn't backed by a systemd unit or container"));
+}

@@ -125,6 +125,9 @@ pub fn HistoryModal(target: RwSignal<Option<(i64, String, bool)>>) -> impl IntoV
     let pending_confirm: RwSignal<Option<ControlAction>> = RwSignal::new(None);
     let control_busy = RwSignal::new(false);
     let control_msg: RwSignal<Option<(bool, String)>> = RwSignal::new(None);
+    let logs_open = RwSignal::new(false);
+    let log_lines: RwSignal<Vec<String>> = RwSignal::new(Vec::new());
+    let logs_panel_ref = NodeRef::<leptos::html::Div>::new();
 
     let current_user = use_context::<RwSignal<Option<CurrentUser>>>();
     let is_admin = move || {
@@ -139,6 +142,7 @@ pub fn HistoryModal(target: RwSignal<Option<(i64, String, bool)>>) -> impl IntoV
             summary.set(None);
             pending_confirm.set(None);
             control_msg.set(None);
+            logs_open.set(false);
             spawn_local(async move {
                 let fetched = fetch_uptime_summary(id).await;
                 summary.set(fetched);
@@ -146,11 +150,61 @@ pub fn HistoryModal(target: RwSignal<Option<(i64, String, bool)>>) -> impl IntoV
         }
     });
 
+    // Opens/closes the log-tail EventSource whenever `logs_open` or the target
+    // service changes. `log_source` is captured once by this single long-lived
+    // effect closure (not re-created per run), so it remembers the previous
+    // connection across reactive updates. Tearing it down first — before
+    // possibly reopening — covers "toggled off", "modal closed" (target ->
+    // None), and a target change all in one place, so cleanup can't be missed.
+    #[cfg(target_arch = "wasm32")]
+    {
+        use std::cell::RefCell;
+        use wasm_bindgen::closure::Closure;
+        use wasm_bindgen::JsCast;
+        use web_sys::EventSource;
+
+        let log_source: RefCell<Option<EventSource>> = RefCell::new(None);
+
+        Effect::new(move |_| {
+            if let Some(es) = log_source.borrow_mut().take() {
+                es.close();
+            }
+
+            if logs_open.get() {
+                if let Some((id, _, _)) = target.get() {
+                    log_lines.set(Vec::new());
+                    if let Ok(es) = EventSource::new(&format!("/api/v1/services/{id}/logs/stream"))
+                    {
+                        let on_message =
+                            Closure::wrap(Box::new(move |event: web_sys::MessageEvent| {
+                                if let Some(data) = event.data().as_string() {
+                                    log_lines.update(|lines| {
+                                        lines.push(data);
+                                        if lines.len() > 500 {
+                                            let excess = lines.len() - 500;
+                                            lines.drain(0..excess);
+                                        }
+                                    });
+                                    if let Some(el) = logs_panel_ref.get_untracked() {
+                                        el.set_scroll_top(el.scroll_height());
+                                    }
+                                }
+                            }) as Box<dyn FnMut(_)>);
+                        es.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
+                        on_message.forget();
+                        *log_source.borrow_mut() = Some(es);
+                    }
+                }
+            }
+        });
+    }
+
     let close = move || {
         target.set(None);
         summary.set(None);
         pending_confirm.set(None);
         control_msg.set(None);
+        logs_open.set(false);
     };
 
     let fire_control = move |action: ControlAction| {
@@ -261,6 +315,25 @@ pub fn HistoryModal(target: RwSignal<Option<(i64, String, bool)>>) -> impl IntoV
                                 {msg}
                             </p>
                         })}
+                    </Show>
+
+                    <Show when=move || {
+                        is_admin() && target.get().map(|(_, _, controllable)| controllable).unwrap_or(false)
+                    }>
+                        <button
+                            class="btn-secondary settings-btn-sm"
+                            style="margin-bottom:0.75rem;"
+                            on:click=move |_| logs_open.update(|v| *v = !*v)
+                        >
+                            {move || if logs_open.get() { "Hide Logs" } else { "Show Logs" }}
+                        </button>
+                        <Show when=move || logs_open.get()>
+                            <div class="history-logs" node_ref=logs_panel_ref>
+                                {move || log_lines.get().iter().map(|line| view! {
+                                    <div class="history-log-line">{line.clone()}</div>
+                                }).collect_view()}
+                            </div>
+                        </Show>
                     </Show>
 
                     {move || match summary.get() {
