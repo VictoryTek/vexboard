@@ -32,7 +32,7 @@ in
         The vexboard package to use. Requires that the vexboard overlay is
         applied to nixpkgs (add `inputs.vexboard.overlays.default` to
         `nixpkgs.overlays`) or set this to the package from the flake directly:
-          package = inputs.vexboard.packages.''${pkgs.system}.vexboard;
+          package = inputs.vexboard.packages.''${pkgs.stdenv.hostPlatform.system}.vexboard;
       '';
     };
 

@@ -55,7 +55,7 @@
           cargoHash = "sha256-DPdCDPTAPBrbqLUqnCwQu1dePs9lGg85JCJOCIr9qjU=";
 
           nativeBuildInputs = [ pkgs.pkg-config ];
-          buildInputs = pkgs.lib.optionals pkgs.stdenv.isDarwin [
+          buildInputs = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
             pkgs.darwin.apple_sdk.frameworks.Security
           ];
 
@@ -97,7 +97,7 @@
       #   nixpkgs.overlays = [ inputs.vexboard.overlays.default ];
       #
       overlays.default = final: prev: {
-        vexboard = self.packages.${prev.system}.vexboard;
+        vexboard = self.packages.${prev.stdenv.hostPlatform.system}.vexboard;
       };
     };
 }
